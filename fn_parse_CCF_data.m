@@ -1,9 +1,20 @@
-function [ ] = fn_parse_CCF_data( cur_CCF_runfolder_FQN_list )
+function [ data_struct, json_struct, h5_struct, txt_struct ] = fn_parse_CCF_data( cur_CCF_runfolder_FQN_list )
 %FN_PARSE_CCF_DATA Summary of this function goes here
 %   Detailed explanation goes here
 %
 % TODO implement looping over a base folder and pick the runfolders
 % automatically
+
+data_struct_list = struct();
+json_struct_list = struct();
+h5_struct_list = struct();
+txt_struct_list = struct();
+
+data_struct = [];
+json_struct = [];
+h5_struct = [];
+txt_struct = [];
+
 
 dbstop if error
 debug = 0;
@@ -11,7 +22,15 @@ debug = 0;
 if ~exist('CCF_run_folder_FQN_list', 'var') || isempty(CCF_run_folder_FQN_list)
 	% (venv_py3.10) root@LC38836:/home/smoeller@dpz.lokal/SCP_CODE/TASKS/foraging_task_2_NHP/src#
 	CCF_recordings_folder_FQN = fullfile('~', 'SCP_CODE', 'TASKS', 'foraging_task_2_NHP', 'recordings');
-	cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '001_101', '0');
+	cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '001_101', '3');
+
+	CCF_data_base_path = fullfile('/', 'Users', 'smoeller', 'DPZ', 'taskcontroller', 'CODE', 'CCF', 'CCF_RECORDINGS', 'recordings');
+	CCF_data_base_path = fullfile('/', 'Volumes', 'snd', 'taskcontroller', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'recordings');
+	cur_CCF_runfolder_FQN_list = fullfile(CCF_data_base_path, '001_101', '28');
+	cur_CCF_runfolder_FQN_list = fullfile(CCF_data_base_path, '100_101', '3');
+
+	cur_CCF_runfolder_FQN_list = fullfile('/', 'Volumes', 'snd', 'taskcontroller', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'recordings', '001_100', '7');
+
 	% use a file picker to select the desired folder
 end
 
@@ -49,7 +68,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		cur_h5_name = h5_dir_struct(i_h5_FQN).name;
 		if (debug)
 			disp(['Processing: ', cur_h5_name]);
-		end	
+		end
 		cur_h5_FQN = [json_dir_struct(i_h5_FQN).folder, filesep, h5_dir_struct(i_h5_FQN).name];
 		[~, cur_h5_name] = fileparts(h5_dir_struct(i_h5_FQN).name);
 
@@ -66,52 +85,71 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		end
 	end
 
-	if length(fieldnames(h5_struct)) == 1 && ismember(fieldnames(h5_struct), {'record_data'})
+	if ~isempty(h5_struct) && length(fieldnames(h5_struct)) == 1 && ismember(fieldnames(h5_struct), {'record_data'})
 		% create a proper header for the data and reshape to 2D table...
-		data.header = {};
-		[dim1, dim2, dim3] = size(h5_struct.record_data);
+		data_struct.header = {};
+		[dim1, dim2, dim3] = size(h5_struct.record_data);	% dim1 X, Y, additional data, dim2; entries: 
 		n_cols = dim1 * dim2;
 		n_rows = dim3;
 
-		data.table = reshape(h5_struct.record_data, n_cols, n_rows)';
-		data.header = {'aim_0_X_rel', 'aim_0_Y_rel', 'tick_timestamp_sec', 'aim_1_X_rel', 'aim_1_Y_rel', '', 'agent_0_X', 'agent_0_Y', 'cumulative_score_0', 'agent_1_X', 'agent_1_Y', ''};
+		data_struct.table = reshape(h5_struct.record_data, n_cols, n_rows)';
+		data_struct.header = {'aim_0_X_rel', 'aim_0_Y_rel', 'tick_timestamp_sec', 'aim_1_X_rel', 'aim_1_Y_rel', '', 'agent_0_X', 'agent_0_Y', 'cumulative_score_0', 'agent_1_X', 'agent_1_Y', ''};
 		n_agent_cols = 12;
+		n_cols_per_entity = 3;
 		n_targets = (n_cols - n_agent_cols)/3;
 		for i_targets = 1 : n_targets
-			cur_target_id_col_idx = n_agent_cols + (n_targets - 1) * i_targets * 3;
-			cur_target_id = unique(data.table(:, cur_target_id_col_idx));
-			data.header(end+1) = {['target_', num2str(cur_target_id), '_X_rel']};
-			data.header(end+1) = {['target_', num2str(cur_target_id), '_Y_rel']};
-			data.header(end+1) = {['target_', num2str(cur_target_id), '_ID']};
+			cur_target_id_col_idx = (n_agent_cols + ((i_targets - 1) * n_cols_per_entity) + n_cols_per_entity);
+			cur_target_id = unique(data_struct.table(:, cur_target_id_col_idx));
+			if length(cur_target_id) ~= 1
+				error('flattening 3D table failed, please investigate why');
+			end
+			data_struct.header(end+1) = {['target_', num2str(cur_target_id), '_X_rel']};
+			data_struct.header(end+1) = {['target_', num2str(cur_target_id), '_Y_rel']};
+			data_struct.header(end+1) = {['target_', num2str(cur_target_id), '_ID']};
 		end
-
+	else
+		disp(['No data found in ', cur_CCF_runfolder_FQN]);
 	end
 
 	% now calculate the distances between the entities and add to table or
 	% add as new table
 
+	if ~isempty(h5_struct)
+		% quick and dirty reward
+		reward_differences = diff(data_struct.table(:, ismember(data_struct.header, {'cumulative_score_0'})));
+		[unique_reward_magnitudes, ~, unique_reward_magnitudes_row_idx] = unique(reward_differences);
+		% count the occurrances
+		total_collections = sum(reward_differences >= 1);
 
-	% quick and dirty reward
-	reward_differences = diff(data.table(:, ismember(data.header, {'cumulative_score_0'})));
-	[unique_reward_magnitudes, ~, unique_reward_magnitudes_row_idx] = unique(reward_differences);
-	% count the occurrances
-	total_collections = sum(reward_differences >= 1);
+		% Note, this will fail for different targets with equal reward
+		% magnitude...
+		% for this we need to calcuulate distances between agents and targets
+		for i_unique_rewards = 1 : length(unique_reward_magnitudes)
+			cur_reward_magnitude = unique_reward_magnitudes(i_unique_rewards);
+			%disp(['Reward magnitude ', num2str(cur_reward_magnitude)]);
+			if cur_reward_magnitude == 0
+				%disp('Reward magnitude 0, skipping');
+				continue
+			end
+			cur_reward_magnitude_n_collections = sum(unique_reward_magnitudes_row_idx == i_unique_rewards);
+			cur_reward_magnitude_n_collections_ratio = cur_reward_magnitude_n_collections / total_collections;
+			disp(['Reward magnitude ', num2str(cur_reward_magnitude), '; n_colllections: ', num2str(cur_reward_magnitude_n_collections), ' of ', num2str(total_collections), ': ', num2str(100*cur_reward_magnitude_n_collections_ratio, '%0.1f'), '%']);
 
-	% Note, this will fail for different targets with equal reward
-	% magnitude...
-	% for this we need to calcuulate distances between agents and targets
-	for i_unique_rewards = 1 : length(unique_reward_magnitudes)
-		cur_reward_magnitude = unique_reward_magnitudes(i_unique_rewards);
-		%disp(['Reward magnitude ', num2str(cur_reward_magnitude)]);
-		if cur_reward_magnitude == 0
-			%disp('Reward magnitude 0, skipping');
-			continue
 		end
-		cur_reward_magnitude_n_collections = sum(unique_reward_magnitudes_row_idx == i_unique_rewards);
-		cur_reward_magnitude_n_collections_ratio = cur_reward_magnitude_n_collections / total_collections;
-		disp(['Reward magnitude ', num2str(cur_reward_magnitude), '; n_colllections: ', num2str(cur_reward_magnitude_n_collections), ' of ', num2str(total_collections), ': ', num2str(100*cur_reward_magnitude_n_collections_ratio, '%0.1f'), '%']);
-
 	end
+
+	if i_runfolder == 1
+		data_struct_list = data_struct;
+		json_struct_list = json_struct;
+		h5_struct_list = h5_struct;
+		txt_struct_list = txt_struct;
+	else
+		data_struct_list(end+1) = data_struct;
+		json_struct_list(end+1) = json_struct;
+		h5_struct_list(end+1) = h5_struct;
+		txt_struct_list(end+1) = txt_struct;
+	end
+
 end
 
 end
