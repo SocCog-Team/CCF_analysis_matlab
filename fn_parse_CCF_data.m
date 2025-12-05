@@ -9,12 +9,14 @@ data_struct_list = struct();
 json_struct_list = struct();
 h5_struct_list = struct();
 txt_struct_list = struct();
+jsonl_struct_list = struct();
+
 
 data_struct = [];
 json_struct = [];
 h5_struct = [];
 txt_struct = [];
-
+jsonl_struct = [];
 
 dbstop if error
 debug = 0;
@@ -26,6 +28,7 @@ if ~exist('CCF_run_folder_FQN_list', 'var') || isempty(CCF_run_folder_FQN_list)
 	%cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '101_000', '0');
 	cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '102_000', '4');
 	cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '109_002', '0');
+	cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '000_000', '4');
 
 	% CCF_data_base_path = fullfile('/', 'Users', 'smoeller', 'DPZ', 'taskcontroller', 'CODE', 'CCF', 'CCF_RECORDINGS', 'recordings');
 	% CCF_data_base_path = fullfile('/', 'Volumes', 'snd', 'taskcontroller', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'recordings');
@@ -50,6 +53,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	h5_dir_struct = dir(fullfile(cur_CCF_runfolder_FQN, '*.h5'));
 	txt_dir_struct = dir(fullfile(cur_CCF_runfolder_FQN, '*.txt'));
 	sessionID_dir_struct = dir(fullfile(cur_CCF_runfolder_FQN, '*.sessionID'));
+	jsonl_dir_struct = dir(fullfile(cur_CCF_runfolder_FQN, '*.jsonl'));
 
 	% the json files
 	for i_json_FQN = 1 : length(json_dir_struct)
@@ -67,6 +71,25 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			disp([cur_json_name, ' contained no data, skipping...']);
 		end
 	end
+
+	% the json files
+	for i_jsonl_FQN = 1 : length(jsonl_dir_struct)
+		cur_jsonl_name = json_dir_struct(i_jsonl_FQN).name;
+		if (debug)
+			disp(['Processing: ', cur_jsonl_name]);
+		end
+		cur_jsonl_FQN = [jsonl_dir_struct(i_jsonl_FQN).folder, filesep, jsonl_dir_struct(i_jsonl_FQN).name];
+		[~, cur_jsonl_name] = fileparts(jsonl_dir_struct(i_jsonl_FQN).name);
+		% this will likely fail for complex or (too) large json files...
+		tmp_string_data = fileread(cur_jsonl_FQN);
+		if ~isempty(tmp_string_data)
+			%parsed_jsonl = fn_parse_jsonl_file(cur_jsonl_FQN);
+			jsonl_struct.(cur_jsonl_name) = fn_parse_jsonl_file(cur_jsonl_FQN);
+		else
+			disp([cur_jsonl_name, ' contained no data, skipping...']);
+		end
+	end
+
 
 	% load the sessionID
 	session_id = [];
@@ -87,11 +110,28 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		cur_h5_FQN = [json_dir_struct(i_h5_FQN).folder, filesep, h5_dir_struct(i_h5_FQN).name];
 		[~, cur_h5_name] = fileparts(h5_dir_struct(i_h5_FQN).name);
 
-		cur_h5info = h5info(cur_h5_FQN);
+		cur_file_info = dir(cur_h5_FQN);
+		if cur_file_info.bytes < 97
+			disp([mfilename, ': H5 file too small, probably corrupted, skipping: ', cur_h5_FQN])
+			continue
+		end
+
+		try 
+			cur_h5info = h5info(cur_h5_FQN);
+		catch ME
+			ME
+			disp([mfilename, ': H5 file probably corrupted, skipping: ', cur_h5_FQN])
+			continue
+		end
 
 		for i_h5_dataset = 1 : length(cur_h5info.Datasets)
 			cur_h5_dataset_name =  cur_h5info.Datasets.Name;
 			cur_data = h5read(cur_h5_FQN, ['/', cur_h5_dataset_name]);	% hdf5 datasets start with / apparently
+
+			if contains(cur_h5_FQN, 'record2D.h5')
+				cur_data = squeeze(cur_data);
+			end
+
 			if ~isempty(cur_data)
 				h5_struct.([cur_h5_name, '_', cur_h5_dataset_name]) = cur_data;
 			else
@@ -99,6 +139,19 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			end
 		end
 	end
+
+figure; plot(h5_struct.AI_samples_data(1,:)');
+
+tmp = h5_struct.DI_samples_data(1,:)';
+figure; plot(h5_struct.DI_samples_data(1,:)');
+tmp_1 = bitget(tmp, 1);
+figure; plot(tmp_1);
+
+tmp_2 = bitget(tmp, 2);
+figure; plot(tmp_2);
+
+
+
 
 	if ~isempty(h5_struct) && ismember({'record_data'}, fieldnames(h5_struct))
 		% create a proper header for the data and reshape to 2D table...

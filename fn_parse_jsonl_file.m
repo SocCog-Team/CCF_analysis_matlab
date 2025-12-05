@@ -3,6 +3,7 @@ function [ parsed_data_table ] = fn_parse_jsonl_file( jsonl_FQN )
 %   Detailed explanation goes here
 
 parsed_data_table = [];
+debug = 0;
 
 try
 	disp(['Parsing: ', jsonl_FQN]);
@@ -14,7 +15,9 @@ try
 	count = 1;
 	while ~isempty(cur_line)
 		count = count + 1;
-		disp(['Line: ', num2str(count)]);
+		if (debug)
+			disp(['Line: ', num2str(count)]);
+		end
 		cur_line = fgetl(cur_jsonl_fd);
 		% if count == 1129
 		% 	disp('Doh...')
