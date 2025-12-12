@@ -1,4 +1,4 @@
-function [ data_struct, json_struct, h5_struct, txt_struct ] = fn_parse_CCF_data( cur_CCF_runfolder_FQN_list )
+function [ record_struct, record2D_struct, AI_samples_struct, DI_samples_struct, json_struct, h5_struct, txt_struct ] = fn_parse_CCF_data( cur_CCF_runfolder_FQN_list )
 %FN_PARSE_CCF_DATA Summary of this function goes here
 %   Detailed explanation goes here
 %
@@ -11,12 +11,20 @@ h5_struct_list = struct();
 txt_struct_list = struct();
 jsonl_struct_list = struct();
 
-
 data_struct = [];
+
+record_struct = [];
+record2D_struct = [];
+AI_samples_struct = [];
+DI_samples_struct = [];
+
 json_struct = [];
 h5_struct = [];
 txt_struct = [];
 jsonl_struct = [];
+
+
+
 
 dbstop if error
 debug = 0;
@@ -36,6 +44,11 @@ if ~exist('CCF_run_folder_FQN_list', 'var') || isempty(CCF_run_folder_FQN_list)
 	% cur_CCF_runfolder_FQN_list = fullfile(CCF_data_base_path, '100_101', '3');
 	% 
 	% cur_CCF_runfolder_FQN_list = fullfile('/', 'Volumes', 'snd', 'taskcontroller', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'recordings', '001_100', '7');
+
+	% Y:\SCP_DATA\SCP-CTRL-01\SESSIONLOGS\2025\251205\20251205T185226.A_NONE.B_NONE.SCP_01.sessiondir\TDT\SCP_DAG_v26_PZ5ms-251205-185203
+	cur_CCF_runfolder_FQN_list = {...
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251205', '20251205T185226.A_NONE.B_NONE.SCP_01.sessiondir') ...
+		};
 
 	% use a file picker to select the desired folder
 end
@@ -96,7 +109,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	if ~isempty(sessionID_dir_struct)
 		session_id = extractBefore(sessionID_dir_struct.name, '.sessionID');
 		CCF_session_dir_FQN = fileread(fullfile(sessionID_dir_struct.folder, sessionID_dir_struct.name));
-		CCF_session_dir_FQN_elements = split(strtrim(CCF_session_dir_FQN), filesep);
+		CCF_session_dir_FQN_elements = split(strtrim(CCF_session_dir_FQN), '/');	% this is coming from Linux so forward slash
 		CCF_run = CCF_session_dir_FQN_elements{end};
 		CCF_pair = CCF_session_dir_FQN_elements{end-1};
 	end
@@ -129,10 +142,13 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			cur_data = h5read(cur_h5_FQN, ['/', cur_h5_dataset_name]);	% hdf5 datasets start with / apparently
 
 			if contains(cur_h5_FQN, 'record2D.h5')
+				% this has a leading dimension of size 1
 				cur_data = squeeze(cur_data);
 			end
 
 			if ~isempty(cur_data)
+				% python arrays have flipped dimensionality, but we want
+				% named columns
 				h5_struct.([cur_h5_name, '_', cur_h5_dataset_name]) = cur_data;
 			else
 				disp([cur_h5_name, ' (' , cur_h5_dataset_name, ') contained no data, skipping...']);
@@ -140,75 +156,101 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		end
 	end
 
-figure; plot(h5_struct.AI_samples_data(1,:)');
 
-tmp = h5_struct.DI_samples_data(1,:)';
-figure; plot(h5_struct.DI_samples_data(1,:)');
-tmp_1 = bitget(tmp, 1);
-figure; plot(tmp_1);
 
-tmp_2 = bitget(tmp, 2);
-figure; plot(tmp_2);
+%figure; plot(h5_struct.AI_samples_data(1,:)');
+
+%tmp = h5_struct.DI_samples_data(1,:)';
+%figure; plot(h5_struct.DI_samples_data(1,:)');
+%tmp_1 = bitget(tmp, 1);
+%figure; plot(tmp_1);
+
+%tmp_2 = bitget(tmp, 2);
+%figure; plot(tmp_2);
 
 
 
 
 	if ~isempty(h5_struct) && ismember({'record_data'}, fieldnames(h5_struct))
 		% create a proper header for the data and reshape to 2D table...
-		data_struct.header = {};
+		record_struct.header = {};
 		[dim1, dim2, dim3] = size(h5_struct.record_data);	% dim1 X, Y, additional data, dim2; entries: 
 		n_cols = dim1 * dim2;
 		n_rows = dim3;
 
-		data_struct.table = reshape(h5_struct.record_data, n_cols, n_rows)';
-		data_struct.header = {'aim_0_X_rel', 'aim_0_Y_rel', 'tick_timestamp_sec', 'aim_1_X_rel', 'aim_1_Y_rel', '', 'agent_0_X', 'agent_0_Y', 'cumulative_score_0', 'agent_1_X', 'agent_1_Y', ''};
+		record_struct.table = reshape(h5_struct.record_data, n_cols, n_rows)';
+		record_struct.header = {'aim_0_X_rel', 'aim_0_Y_rel', 'tick_timestamp_sec', 'aim_1_X_rel', 'aim_1_Y_rel', '', 'agent_0_X', 'agent_0_Y', 'cumulative_score_0', 'agent_1_X', 'agent_1_Y', ''};
 		n_agent_cols = 12;
 		n_cols_per_entity = 3;
 		n_targets = (n_cols - n_agent_cols)/3;
 		for i_targets = 1 : n_targets
 			cur_target_id_col_idx = (n_agent_cols + ((i_targets - 1) * n_cols_per_entity) + n_cols_per_entity);
-			cur_target_id = unique(data_struct.table(:, cur_target_id_col_idx));
+			cur_target_id = unique(record_struct.table(:, cur_target_id_col_idx));
 			if length(cur_target_id) ~= 1
 				error('flattening 3D table failed, please investigate why');
 			end
-			data_struct.header(end+1) = {['target_', num2str(cur_target_id), '_X_rel']};
-			data_struct.header(end+1) = {['target_', num2str(cur_target_id), '_Y_rel']};
-			data_struct.header(end+1) = {['target_', num2str(cur_target_id), '_ID']};
+			record_struct.header(end+1) = {['target_', num2str(cur_target_id), '_X_rel']};
+			record_struct.header(end+1) = {['target_', num2str(cur_target_id), '_Y_rel']};
+			record_struct.header(end+1) = {['target_', num2str(cur_target_id), '_ID']};
 		end
 		
 	else
 		disp(['No data record_data found in ', cur_CCF_runfolder_FQN]);
 	end
-
+	
+	% record2D
 	if ~isempty(h5_struct) && ismember({'record2D_data'}, fieldnames(h5_struct))
 		% create a proper header for the data and reshape to 2D table...
-		data_struct.header = json_struct.record2D_header.record2D_column_names';
-		data_struct.table = squeeze(h5_struct.record2D_data)';
-
-		% data_struct.header = {};
-		% [dim1, dim2, dim3] = size(h5_struct.record_data);	% dim1 X, Y, additional data, dim2; entries: 
-		% n_cols = dim1 * dim2;
-		% n_rows = dim3;
-		% 
-		% data_struct.table = reshape(h5_struct.record_data, n_cols, n_rows)';
-		% data_struct.header = {'aim_0_X_rel', 'aim_0_Y_rel', 'tick_timestamp_sec', 'aim_1_X_rel', 'aim_1_Y_rel', '', 'agent_0_X', 'agent_0_Y', 'cumulative_score_0', 'agent_1_X', 'agent_1_Y', ''};
-		% n_agent_cols = 12;
-		% n_cols_per_entity = 3;
-		% n_targets = (n_cols - n_agent_cols)/3;
-		% for i_targets = 1 : n_targets
-		% 	cur_target_id_col_idx = (n_agent_cols + ((i_targets - 1) * n_cols_per_entity) + n_cols_per_entity);
-		% 	cur_target_id = unique(data_struct.table(:, cur_target_id_col_idx));
-		% 	if length(cur_target_id) ~= 1
-			% 	error('flattening 3D table failed, please investigate why');
-		% 	end
-		% 	data_struct.header(end+1) = {['target_', num2str(cur_target_id), '_X_rel']};
-		% 	data_struct.header(end+1) = {['target_', num2str(cur_target_id), '_Y_rel']};
-		% 	data_struct.header(end+1) = {['target_', num2str(cur_target_id), '_ID']};
-		% end
-		
+		record2D_struct.header = json_struct.record2D_header.record2D_column_names';
+		record2D_struct.table = squeeze(h5_struct.record2D_data)';
 	else
 		disp(['No record2D data found in ', cur_CCF_runfolder_FQN]);
 	end
+
+	% AI_samples
+	[AI_samples.timestamp_list, AI_samples.data_struct] = fn_estimate_per_sample_timestamps_for_h5table('AI_samples', h5_struct, json_struct);
+
+
+	% DI_samples
+	[DI_samples.timestamp_list, DI_samples.data_struct] = fn_estimate_per_sample_timestamps_for_h5table('DI_samples', h5_struct, json_struct);
+
+
+
+% 	if ~isempty(h5_struct) && ismember({'AI_samples_data'}, fieldnames(h5_struct))
+% 		% create a proper header for the data and reshape to 2D table...
+% 		AI_samples_struct.header = json_struct.AI_samples_header';
+% 		AI_samples_struct.table = squeeze(h5_struct.AI_samples_data)';
+% 		if ~isempty(h5_struct) && ismember({'AI_samples_idx_ts_data'}, fieldnames(h5_struct))
+% 			% construct a python timestamp list
+% 			n_samples = size(AI_samples_struct.table, 1);
+% 			cur_header = json_struct.AI_samples_idx_ts_header';
+% 			cur_data = h5_struct.AI_samples_idx_ts_data';
+% 			first_idx = cur_data(2, ismember(cur_header, {'python_index'})) + 1;
+% 			first_ts = cur_data(2, ismember(cur_header, {'sample_timestamp_s'}));
+% 			last_idx = cur_data(end-12, ismember(cur_header, {'python_index'})) + 1;
+% 			last_ts = cur_data(end-12, ismember(cur_header, {'sample_timestamp_s'}));
+% 			time_incremnent_per_sample = (last_ts - first_ts) / (last_idx - first_idx); % divide the time span by the number od real samples in between
+% 			first_sample_ts = first_ts - (first_idx * time_incremnent_per_sample);
+% 			last_sample_ts = first_ts + (n_samples * time_incremnent_per_sample);
+% 			sample_timestamp_s_data = first_sample_ts + (1:1:n_samples)' * time_incremnent_per_sample;
+% 			sample_timestamp_s_data(end) - last_sample_ts
+% 
+% sample_timestamp_s_data(first_idx) - first_ts
+% sample_timestamp_s_data(last_idx) - last_ts
+% 
+% tmp = sample_timestamp_s_data(cur_data(:, ismember(cur_header, {'python_index'})) + 1) - cur_data(:, ismember(cur_header, {'sample_timestamp_s'}))
+% 
+% 
+% 		else
+% 			disp(['No AI_samples_idx_ts_data data found in ', cur_CCF_runfolder_FQN]);
+% 		end
+% 
+% 	else
+% 		disp(['No AI_samples_data data found in ', cur_CCF_runfolder_FQN]);
+% 	end
+
+
+
 
 	% now calculate the distances between the entities and add to table or
 	% add as new table
