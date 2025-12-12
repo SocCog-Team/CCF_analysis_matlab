@@ -1,4 +1,4 @@
-function [ record_struct, record2D_struct, AI_samples_struct, DI_samples_struct, json_struct, h5_struct, txt_struct ] = fn_parse_CCF_data( cur_CCF_runfolder_FQN_list )
+function [ record_struct, record2D_struct, AI_samples_struct, DI_samples_struct, json_struct, h5_struct, txt_struct, jsonl_struct ] = fn_parse_CCF_data( cur_CCF_runfolder_FQN_list )
 %FN_PARSE_CCF_DATA Summary of this function goes here
 %   Detailed explanation goes here
 %
@@ -207,47 +207,16 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		disp(['No record2D data found in ', cur_CCF_runfolder_FQN]);
 	end
 
+	
+	% add session timestamps to sampled data
 	% AI_samples
-	[AI_samples.timestamp_list, AI_samples.data_struct] = fn_estimate_per_sample_timestamps_for_h5table('AI_samples', h5_struct, json_struct);
-
+	[AI_samples_timestamp_list, AI_samples_struct] = fn_estimate_per_sample_timestamps_for_h5table('AI_samples', h5_struct, json_struct);
 
 	% DI_samples
-	[DI_samples.timestamp_list, DI_samples.data_struct] = fn_estimate_per_sample_timestamps_for_h5table('DI_samples', h5_struct, json_struct);
+	[DI_samples?timestamp_list, DI_samples?struct] = fn_estimate_per_sample_timestamps_for_h5table('DI_samples', h5_struct, json_struct);
 
 
 
-% 	if ~isempty(h5_struct) && ismember({'AI_samples_data'}, fieldnames(h5_struct))
-% 		% create a proper header for the data and reshape to 2D table...
-% 		AI_samples_struct.header = json_struct.AI_samples_header';
-% 		AI_samples_struct.table = squeeze(h5_struct.AI_samples_data)';
-% 		if ~isempty(h5_struct) && ismember({'AI_samples_idx_ts_data'}, fieldnames(h5_struct))
-% 			% construct a python timestamp list
-% 			n_samples = size(AI_samples_struct.table, 1);
-% 			cur_header = json_struct.AI_samples_idx_ts_header';
-% 			cur_data = h5_struct.AI_samples_idx_ts_data';
-% 			first_idx = cur_data(2, ismember(cur_header, {'python_index'})) + 1;
-% 			first_ts = cur_data(2, ismember(cur_header, {'sample_timestamp_s'}));
-% 			last_idx = cur_data(end-12, ismember(cur_header, {'python_index'})) + 1;
-% 			last_ts = cur_data(end-12, ismember(cur_header, {'sample_timestamp_s'}));
-% 			time_incremnent_per_sample = (last_ts - first_ts) / (last_idx - first_idx); % divide the time span by the number od real samples in between
-% 			first_sample_ts = first_ts - (first_idx * time_incremnent_per_sample);
-% 			last_sample_ts = first_ts + (n_samples * time_incremnent_per_sample);
-% 			sample_timestamp_s_data = first_sample_ts + (1:1:n_samples)' * time_incremnent_per_sample;
-% 			sample_timestamp_s_data(end) - last_sample_ts
-% 
-% sample_timestamp_s_data(first_idx) - first_ts
-% sample_timestamp_s_data(last_idx) - last_ts
-% 
-% tmp = sample_timestamp_s_data(cur_data(:, ismember(cur_header, {'python_index'})) + 1) - cur_data(:, ismember(cur_header, {'sample_timestamp_s'}))
-% 
-% 
-% 		else
-% 			disp(['No AI_samples_idx_ts_data data found in ', cur_CCF_runfolder_FQN]);
-% 		end
-% 
-% 	else
-% 		disp(['No AI_samples_data data found in ', cur_CCF_runfolder_FQN]);
-% 	end
 
 
 

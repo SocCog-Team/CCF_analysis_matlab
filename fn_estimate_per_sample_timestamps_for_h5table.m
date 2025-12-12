@@ -16,17 +16,29 @@ if ~isempty(h5_struct) && ismember({[cur_base_name, '_data']}, fieldnames(h5_str
 		n_samples = size(data_struct.table, 1);
 		cur_header = json_struct.([cur_base_name, '_idx_ts_header'])';
 		cur_data = h5_struct.([cur_base_name, '_idx_ts_data'])';
-		first_idx = cur_data(1, ismember(cur_header, {'python_index'})) + 1;	% python indices start at 0, so convert to matlab index here
+
+		if ~ismember({'batchsize'}, cur_header)
+			%broken indexing, fix this up
+			% this is a ctude fix for incorrect indexing on AI and DI sampling
+			corrected_matlab_indices = cumsum(diff([0; cur_data(:, ismember(cur_header, {'python_index'}))]) + 1);
+			%first_idx = corrected_matlab_indices(1);
+			%last_idx = corrected_matlab_indices(end);
+			cur_data(:, ismember(cur_header, {'python_index'})) = corrected_matlab_indices - 1;
+		end
+			
+		corrected_matlab_indices = cur_data(:, ismember(cur_header, {'python_index'})) + 1;
+
+		first_idx = corrected_matlab_indices(1);	% python indices start at 0, so convert to matlab index here
 		first_ts = cur_data(1, ismember(cur_header, {'sample_timestamp_s'}));
 				
-		last_idx = cur_data(end, ismember(cur_header, {'python_index'})) + 1;
-		last_ts = cur_data(end, ismember(cur_header, {'sample_timestamp_s'}));
+		last_idx = corrected_matlab_indices(end-1);
+		last_ts = cur_data(end-1, ismember(cur_header, {'sample_timestamp_s'}));
 
 
-		% this is a ctude fix for incorrect indexing on AI and DI sampling
-		corrected_matlab_indices = cumsum(diff([0; cur_data(:, ismember(cur_header, {'python_index'}))]) + 1);
-		first_idx = corrected_matlab_indices(1);
-		last_idx = corrected_matlab_indices(end);
+		%% this is a ctude fix for incorrect indexing on AI and DI sampling
+		%corrected_matlab_indices = cumsum(diff([0; cur_data(:, ismember(cur_header, {'python_index'}))]) + 1);
+		%first_idx = corrected_matlab_indices(1);
+		%last_idx = corrected_matlab_indices(end);
 
 
 
@@ -34,7 +46,10 @@ if ~isempty(h5_struct) && ismember({[cur_base_name, '_data']}, fieldnames(h5_str
 		first_sample_ts = first_ts - (first_idx * time_incremnent_per_sample);
 		last_sample_ts = first_ts + (n_samples * time_incremnent_per_sample);
 		sample_timestamp_s_data = first_sample_ts + (1:1:n_samples)' * time_incremnent_per_sample;
-		sample_timestamp_s_data(end) - last_sample_ts
+		%sample_timestamp_s_data(end) - last_sample_ts
+
+		timestamp_list = sample_timestamp_s_data;
+		data_struct.timestamp_list = sample_timestamp_s_data;
 
 		% the next are trivially equal
 		%sample_timestamp_s_data(first_idx) - first_ts
