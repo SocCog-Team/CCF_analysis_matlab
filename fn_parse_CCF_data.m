@@ -36,7 +36,7 @@ if ~exist('CCF_run_folder_FQN_list', 'var') || isempty(CCF_run_folder_FQN_list)
 	%cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '101_000', '0');
 	cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '102_000', '4');
 	cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '109_002', '0');
-	cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '000_000', '4');
+	cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '000_000', '19');
 
 	% CCF_data_base_path = fullfile('/', 'Users', 'smoeller', 'DPZ', 'taskcontroller', 'CODE', 'CCF', 'CCF_RECORDINGS', 'recordings');
 	% CCF_data_base_path = fullfile('/', 'Volumes', 'snd', 'taskcontroller', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'recordings');
@@ -49,6 +49,7 @@ if ~exist('CCF_run_folder_FQN_list', 'var') || isempty(CCF_run_folder_FQN_list)
 	cur_CCF_runfolder_FQN_list = {...
 		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251205', '20251205T185226.A_NONE.B_NONE.SCP_01.sessiondir') ...
 		};
+	cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '000_000', '19');
 
 	% use a file picker to select the desired folder
 end
@@ -213,7 +214,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	[AI_samples_timestamp_list, AI_samples_struct] = fn_estimate_per_sample_timestamps_for_h5table('AI_samples', h5_struct, json_struct);
 
 	% DI_samples
-	[DI_samples?timestamp_list, DI_samples?struct] = fn_estimate_per_sample_timestamps_for_h5table('DI_samples', h5_struct, json_struct);
+	[DI_samples_timestamp_list, DI_samples_struct] = fn_estimate_per_sample_timestamps_for_h5table('DI_samples', h5_struct, json_struct);
 
 
 
