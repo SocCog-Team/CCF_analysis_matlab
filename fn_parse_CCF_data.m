@@ -11,7 +11,7 @@ h5_struct_list = struct();
 txt_struct_list = struct();
 jsonl_struct_list = struct();
 
-data_struct = [];
+%data_struct = [];
 
 record_struct = [];
 record2D_struct = [];
@@ -47,9 +47,10 @@ if ~exist('CCF_run_folder_FQN_list', 'var') || isempty(CCF_run_folder_FQN_list)
 
 	% Y:\SCP_DATA\SCP-CTRL-01\SESSIONLOGS\2025\251205\20251205T185226.A_NONE.B_NONE.SCP_01.sessiondir\TDT\SCP_DAG_v26_PZ5ms-251205-185203
 	cur_CCF_runfolder_FQN_list = {...
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251205', '20251205T185226.A_NONE.B_NONE.SCP_01.sessiondir') ...
+		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251205', '20251205T185226.A_NONE.B_NONE.SCP_01.sessiondir') ...
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251216', '20251216T114536.A_NONE.B_NONE.SCP_01.sessiondir') ...
 		};
-	cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '000_000', '19');
+	%cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '000_000', '19');
 
 	% use a file picker to select the desired folder
 end
@@ -211,13 +212,12 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	
 	% add session timestamps to sampled data
 	% AI_samples
-	[AI_samples_timestamp_list, AI_samples_struct] = fn_estimate_per_sample_timestamps_for_h5table('AI_samples', h5_struct, json_struct);
+	[AI_samples_timestamp_list, AI_samples_struct, AI_timing_fh] = fn_estimate_per_sample_timestamps_for_h5table('AI_samples', h5_struct, json_struct);
+	fn_save_figure(AI_timing_fh, cur_CCF_runfolder_FQN, 'AI_sampling_timestamp_control_plot.pdf');
 
 	% DI_samples
-	[DI_samples_timestamp_list, DI_samples_struct] = fn_estimate_per_sample_timestamps_for_h5table('DI_samples', h5_struct, json_struct);
-
-
-
+	[DI_samples_timestamp_list, DI_samples_struct, DI_timing_fh] = fn_estimate_per_sample_timestamps_for_h5table('DI_samples', h5_struct, json_struct);
+	fn_save_figure(DI_timing_fh, cur_CCF_runfolder_FQN, 'DI_sampling_timestamp_control_plot.pdf');
 
 
 
@@ -228,8 +228,8 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	if ~isempty(h5_struct)
 		% quick and dirty reward and collection estimation
 		% these are co9rrected for the offset if diff()
-		A0.collection_magnitude_tick_ldx = [false; diff(data_struct.table(:, ismember(data_struct.header, {'agent0_cumulative_score'})))];
-		B1.collection_magnitude_tick_ldx = [false; diff(data_struct.table(:, ismember(data_struct.header, {'agent1_cumulative_score'})))];
+		A0.collection_magnitude_tick_ldx = [false; diff(record2D_struct.table(:, ismember(record2D_struct.header, {'agent0_cumulative_score'})))];
+		B1.collection_magnitude_tick_ldx = [false; diff(record2D_struct.table(:, ismember(record2D_struct.header, {'agent1_cumulative_score'})))];
 		A0.collection_ldx = A0.collection_magnitude_tick_ldx > 0;
 		B1.collection_ldx = B1.collection_magnitude_tick_ldx > 0;
 		A0.n_collections = sum(A0.collection_ldx);
@@ -241,8 +241,8 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		% target report
 		[unique_reward_magnitudes, ~, unique_reward_magnitudes_row_idx] = unique(A0.collection_magnitude_tick_ldx);
 		% count the occurrances
-		total_collections = data_struct.table(end, ismember(data_struct.header, {'n_finished_collections'}));
-		total_duration_s = data_struct.table(end, ismember(data_struct.header, {'timestamp'})) - data_struct.table(1, ismember(data_struct.header, {'timestamp'}));
+		total_collections = record2D_struct.table(end, ismember(record2D_struct.header, {'n_finished_collections'}));
+		total_duration_s = record2D_struct.table(end, ismember(record2D_struct.header, {'timestamp'})) - record2D_struct.table(1, ismember(record2D_struct.header, {'timestamp'}));
 
 		disp(['sessionID: ', session_id, '; CCF pair code: ', CCF_pair, '; CCF run number: ', CCF_run]);
 		disp(['duration [sec]: ', num2str(total_duration_s, '%0.0f'), '; total collections: ', num2str(total_collections), '; CA: ', num2str(A0.n_collections), '; CB: ', num2str(B1.n_collections), '; pulses: RA: ', num2str(A0.n_pulses), '; RB: ', num2str(B1.n_pulses)]);
@@ -273,12 +273,12 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	end
 
 	if i_runfolder == 1
-		data_struct_list = data_struct;
+		%data_struct_list = data_struct;
 		json_struct_list = json_struct;
 		h5_struct_list = h5_struct;
 		txt_struct_list = txt_struct;
 	else
-		data_struct_list(end+1) = data_struct;
+		%data_struct_list(end+1) = data_struct;
 		json_struct_list(end+1) = json_struct;
 		h5_struct_list(end+1) = h5_struct;
 		txt_struct_list(end+1) = txt_struct;
@@ -287,4 +287,21 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 end
 
 end
+
+
+function [] = fn_save_figure(figure_handle, data_path, name_string)
+
+if ~isempty(figure_handle)
+	if ismember(exist('write_out_figure'), [2,4])
+		write_out_figure(figure_handle, fullfile(data_path, name_string));
+	else
+		exportgraphics(figure_handle, fullfile(cur_path, fullfile(data_path, name_string)), 'BackgroundColor', 'none', 'ContentType', 'vector');
+	end
+	close(figure_handle);
+end
+
+return
+end
+
+
 
