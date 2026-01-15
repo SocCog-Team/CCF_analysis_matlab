@@ -237,7 +237,6 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		% dispensed, so the reward collection number is offset by +1 for
 		% reason TASK, while offset by +0 for reason MANUAL
 		triallog_table = fn_add_reward_information_to_triallog(triallog_table, jsonl_struct.reward_trains);
-
 	end
 
 

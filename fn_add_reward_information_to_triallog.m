@@ -128,7 +128,5 @@ for i_side = 1 : length(side_list)
 	end
 end
 
-
-
 end
 
