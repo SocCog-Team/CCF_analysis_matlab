@@ -1,9 +1,12 @@
-function [ record_struct, record2D_struct, AI_samples_struct, DI_samples_struct, json_struct, h5_struct, txt_struct, jsonl_struct ] = fn_parse_CCF_data( cur_CCF_runfolder_FQN_list )
+function [ triallog_table, record_struct, record2D_struct, AI_samples_struct, DI_samples_struct, json_struct, h5_struct, txt_struct, jsonl_struct, enum_struct ] = fn_parse_CCF_data( cur_CCF_runfolder_FQN_list )
 %FN_PARSE_CCF_DATA Summary of this function goes here
 %   Detailed explanation goes here
 %
 % TODO implement looping over a base folder and pick the runfolders
 % automatically
+%	create a per collection table that lists relevant events per collection
+%	(aka "trial") for visual events as well as touch events and reward
+%	events...
 
 data_struct_list = struct();
 json_struct_list = struct();
@@ -22,12 +25,18 @@ json_struct = [];
 h5_struct = [];
 txt_struct = [];
 jsonl_struct = [];
-
-
+enum_struct = [];
 
 
 dbstop if error
 debug = 0;
+
+% what threshold to use to detect up from down, with Mike Walsh's caltech
+% detector and the level output mac is ~3.3 Volts, while low is at 0 if the
+% gain set correctly
+photodiode_AI_analog_threshold_V = 2.5;	% give it some slack
+
+
 
 if ~exist('CCF_run_folder_FQN_list', 'var') || isempty(CCF_run_folder_FQN_list)
 	% (venv_py3.10) root@LC38836:/home/smoeller@dpz.lokal/SCP_CODE/TASKS/foraging_task_2_NHP/src#
@@ -69,6 +78,10 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	txt_dir_struct = dir(fullfile(cur_CCF_runfolder_FQN, '*.txt'));
 	sessionID_dir_struct = dir(fullfile(cur_CCF_runfolder_FQN, '*.sessionID'));
 	jsonl_dir_struct = dir(fullfile(cur_CCF_runfolder_FQN, '*.jsonl'));
+
+	% the python enums:
+	enum_struct = fn_extract_python_enums(fullfile(cur_CCF_runfolder_FQN, 'enums.py'));
+
 
 	% the json files
 	for i_json_FQN = 1 : length(json_dir_struct)
@@ -205,19 +218,78 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		% create a proper header for the data and reshape to 2D table...
 		record2D_struct.header = json_struct.record2D_header.record2D_column_names';
 		record2D_struct.table = squeeze(h5_struct.record2D_data)';
+		record2D_table = array2table(record2D_struct.table, 'VariableNames', record2D_struct.header);
 	else
 		disp(['No record2D data found in ', cur_CCF_runfolder_FQN]);
 	end
 
-	
-	% add session timestamps to sampled data
-	% AI_samples
-	[AI_samples_timestamp_list, AI_samples_struct, AI_timing_fh] = fn_estimate_per_sample_timestamps_for_h5table('AI_samples', h5_struct, json_struct);
-	fn_save_figure(AI_timing_fh, cur_CCF_runfolder_FQN, 'AI_sampling_timestamp_control_plot.pdf');
+	% extract collection/trial start/stop timestamps from record2D
 
-	% DI_samples
-	[DI_samples_timestamp_list, DI_samples_struct, DI_timing_fh] = fn_estimate_per_sample_timestamps_for_h5table('DI_samples', h5_struct, json_struct);
-	fn_save_figure(DI_timing_fh, cur_CCF_runfolder_FQN, 'DI_sampling_timestamp_control_plot.pdf');
+	
+	% process record2D to create a triallog table (as matlab table)
+	if ~isempty(record2D_struct)
+		triallog_table = fn_create_triallog_from_record2D(record2D_table, enum_struct);
+	end
+
+	% add the reward information per collection
+	if ~isempty(jsonl_struct) && isfield(jsonl_struct, 'reward_trains')
+		% attention collection number is increased just before reward is
+		% dispensed, so the reward collection number is offset by +1 for
+		% reason TASK, while offset by +0 for reason MANUAL
+		triallog_table = fn_add_reward_information_to_triallog(triallog_table, jsonl_struct.reward_trains);
+
+	end
+
+
+	if isfield(h5_struct, 'DI_samples_data') && ~isempty(h5_struct.DI_samples_data)
+		% DI_samples
+		[DI_samples_timestamp_list, DI_samples_struct, DI_timing_fh] = fn_estimate_per_sample_timestamps_for_h5table('DI_samples', h5_struct, json_struct);
+		fn_save_figure(DI_timing_fh, cur_CCF_runfolder_FQN, 'DI_sampling_timestamp_control_plot.pdf');
+		% convert the bit lines into individual columns in a ddition to the
+		% full DI word
+		DI_word = DI_samples_struct.table;
+		for i_bitline = 1 : length(DI_samples_struct.header)
+			DI_samples_struct.table(:, 1+i_bitline) = bitget(DI_word, i_bitline);
+		end
+		DI_samples_struct.header = ['DI_word', DI_samples_struct.header];
+
+		mean_DI_sampling_interval_s =  mean(diff(DI_samples_timestamp_list));
+		DI_samples_table = fn_convert_header_table_timestamp_list_struct_to_table(DI_samples_struct);
+		DI_samples_collection_num_list = fn_create_feature_list_from_id_start_end_ts_lists(DI_samples_timestamp_list, triallog_table.collection_num, triallog_table.collection_start_timestamp_s, [triallog_table.collection_start_timestamp_s(2:end) - (0.1 * mean_DI_sampling_interval_s); triallog_table.collection_end_timestamp_s(end)]);
+		DI_samples_table = addvars(DI_samples_table, DI_samples_collection_num_list, 'NewVariableNames', 'collection_num');
+	end
+
+
+	if isfield(h5_struct, 'AI_samples_data') && ~isempty(h5_struct.AI_samples_data)
+		% add session timestamps to sampled data
+		% AI_samples
+		[AI_samples_timestamp_list, AI_samples_struct, AI_timing_fh] = fn_estimate_per_sample_timestamps_for_h5table('AI_samples', h5_struct, json_struct);
+		fn_save_figure(AI_timing_fh, cur_CCF_runfolder_FQN, 'AI_sampling_timestamp_control_plot.pdf');
+		mean_AI_sampling_interval_s =  mean(diff(AI_samples_timestamp_list));
+		AI_samples_table = fn_convert_header_table_timestamp_list_struct_to_table(AI_samples_struct);
+		AI_samples_collection_num_list = fn_create_feature_list_from_id_start_end_ts_lists(AI_samples_timestamp_list, triallog_table.collection_num, triallog_table.collection_start_timestamp_s, [triallog_table.collection_start_timestamp_s(2:end) - (0.1 * mean_AI_sampling_interval_s); triallog_table.collection_end_timestamp_s(end)]);
+		AI_samples_table = addvars(AI_samples_table, AI_samples_collection_num_list, 'NewVariableNames', 'collection_num');
+
+		% process the photodiode information and correct the timing in the
+		% jsonl table
+		% extract the photodiode onset/offset timestamps and add to
+		% per_collection_table
+		onset_offset_events_struct = fn_extract_event_ts_from_photodiode_AI_samples( AI_samples_timestamp_list, AI_samples_table.MSD_LCD_level, AI_samples_collection_num_list, photodiode_AI_analog_threshold_V);
+
+		% add columns to the for PDD_onset_timestamp_s and
+		% PDD_offset_timestamp_s for the matching collection
+		% numbers
+		triallog_table = addvars(triallog_table, nan(size(triallog_table.collection_start_timestamp_s)), nan(size(triallog_table.collection_start_timestamp_s)), 'NewVariableNames', {'PDD_onset_timestamp_s', 'PDD_offset_timestamp_s'});
+		triallog_table.PDD_onset_timestamp_s(onset_offset_events_struct.pd_block_onset_collection_num_list + 1) = onset_offset_events_struct.pd_block_onset_s_list;
+		% he next is correct, but these are lagging behind by a numbre of
+		% samples as we first increase the collection counter before we
+		% change the stimulus...
+		%triallog_table.PDD_offset_timestamp_s(onset_offset_events_struct.pd_block_offset_collection_num_list + 1) = onset_offset_events_struct.pd_block_offset_s_list;
+		% so we account that for the pd_block_onset_collection_num_list as
+		% otherwise in each collection the offset preceds the onset (which is technically correct, but undesired here for the per collection table)
+		triallog_table.PDD_offset_timestamp_s(onset_offset_events_struct.pd_block_onset_collection_num_list + 1) = onset_offset_events_struct.pd_block_offset_s_list;
+	end
+
 
 
 
@@ -301,6 +373,23 @@ if ~isempty(figure_handle)
 end
 
 return
+end
+
+
+
+function  out_table = fn_convert_header_table_timestamp_list_struct_to_table( in_struct )
+out_table = [];
+
+if length(in_struct.header) ~= size(in_struct.table, 2)
+	error([mfilename, ': data array has more columns than the column name list, investigate...']);
+end
+
+out_table = array2table(in_struct.table, 'VariableNames', in_struct.header);
+
+% now add the timestamp_list
+%out_table.timestamp_s = in_struct.timestamp_list;
+out_table = addvars(out_table, in_struct.timestamp_list, 'Before', 1, 'NewVariableNames', 'timestamp_s');
+
 end
 
 

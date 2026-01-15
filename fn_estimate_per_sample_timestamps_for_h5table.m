@@ -1,6 +1,8 @@
 function [ timestamp_list, data_struct, cur_fh ] = fn_estimate_per_sample_timestamps_for_h5table( cur_base_name, h5_struct, json_struct )
 %FN_ESTIMATE_PER_SAMPLE_TIMESTAMPS_FOR_H4TABLE Summary of this function goes here
-%   Detailed explanation goes here
+%   We can extra/inter- polate the timestamps from our best estimates of
+%   individual sample timestamps, but we can not do the same for the
+%   collection number as that does not increase gradually...
 
 timestamp_list = [];
 data_struct = [];
