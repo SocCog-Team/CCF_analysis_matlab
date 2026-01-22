@@ -8,6 +8,11 @@ function [ triallog_table, record_struct, record2D_struct, AI_samples_struct, DI
 %	(aka "trial") for visual events as well as touch events and reward
 %	events...
 
+
+
+
+
+
 data_struct_list = struct();
 json_struct_list = struct();
 h5_struct_list = struct();
@@ -27,8 +32,10 @@ txt_struct = [];
 jsonl_struct = [];
 enum_struct = [];
 
-
+timestamps.(mfilename).start = tic;
+disp(['Starting: ', mfilename]);
 dbstop if error
+fq_mfilename = mfilename('fullpath');
 debug = 0;
 
 % what threshold to use to detect up from down, with Mike Walsh's caltech
@@ -228,7 +235,12 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	
 	% process record2D to create a triallog table (as matlab table)
 	if ~isempty(record2D_struct)
-		triallog_table = fn_create_triallog_from_record2D(record2D_table, enum_struct);
+		if isfield(json_struct, 'conf')
+			target_radius = json_struct.conf.target_radius;
+		else
+			target_radius = [];
+		end
+		[triallog_table, record2D_table] = fn_create_triallog_from_record2D(record2D_table, enum_struct, target_radius);
 	end
 
 	% add the reward information per collection
@@ -356,6 +368,14 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	end
 
 end
+
+
+timestamps.(mfilename).end = toc(timestamps.(mfilename).start);
+disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end), ' seconds.']);
+disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end / 60), ' minutes.']);
+%disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end / (60 * 60)), ' hours.']);
+%disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end / (60 * 60 * 24)), ' days. Done...']);
+
 
 end
 
