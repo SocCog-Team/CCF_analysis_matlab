@@ -1,4 +1,4 @@
-function [ triallog_table, record2D_table ] = fn_create_triallog_from_record2D( record2D_table, enum_struct, target_radius )
+function [ triallog_table, record2D_table, sorted_target_state_transition_table ] = fn_create_triallog_from_record2D( record2D_table, enum_struct, target_radius )
 %FN_CREATE_TRIALLOG_FROM_RECORD2D Summary of this function goes here
 %   for collection and alignment event selection having a two table is
 %   pretty conveniebt, so construct one here
@@ -17,7 +17,7 @@ calc_and_store_distances_to_targets = 1;
 
 
 triallog_table = [];
-
+sorted_target_state_transition_table = [];
 
 record2D_colname_list = record2D_table.Properties.VariableNames;
 
@@ -39,8 +39,9 @@ target_prefix_list = unique(target_prefix_list);
 
 start_ts = record2D_table.timestamp(1);
 
-[unique_collection_list, first_instance_of_collection_num_idx, unique_collection_list_row_idx] = unique(record2D_table.n_finished_collections);
+[unique_collection_list, first_instance_of_collection_num_idx, ~] = unique(record2D_table.n_finished_collections);
 n_collections = length(unique_collection_list);
+n_record2D_rows = size(record2D_table, 1);
 
 % build a table with relevant per collection/trial information
 % COLLECTION NUMBER
@@ -124,14 +125,14 @@ target_IDX_list = nan(size(target_prefix_list));
 target_id_list = target_IDX_list;
 target_id_name_list = {};
 for i_target_IDX = 1 : length(target_prefix_list)
-	cur_tagetIDX = str2double(regexprep(target_prefix_list{i_target_IDX}, 'target', ''));
-	target_IDX_list(i_target_IDX) = cur_tagetIDX;
+	cur_targetIDX = str2double(regexprep(target_prefix_list{i_target_IDX}, 'target', ''));
+	target_IDX_list(i_target_IDX) = cur_targetIDX;
 	unique_target_IDX = unique(record2D_table.([target_prefix_list{i_target_IDX}, '_id']));
 	if ~isempty(unique_target_IDX) && length(unique_target_IDX) < 2
 		target_id_list(i_target_IDX) = unique_target_IDX;
 		% target_id can change for special targets, so we need to extract
 		% that trial by trial...
-		cur_target_IDX_unique_target_id_list = unique(record2D_table.(['target', num2str(cur_tagetIDX), '_id']));
+		cur_target_IDX_unique_target_id_list = unique(record2D_table.(['target', num2str(cur_targetIDX), '_id']));
 		target_id_name_list(i_target_IDX) = enum_struct.target_id.name_list(find(enum_struct.target_id.value_list == cur_target_IDX_unique_target_id_list));
 	end
 	if ~isempty(unique_target_IDX) && length(unique_target_IDX) > 1
@@ -156,11 +157,12 @@ end
 if (cur_target_IDX_cols_need_fixup)
 	% some early record2D files have incorrect cur_target_IDX values (all 1s)
 	for i_target_IDX = 1 : length(target_prefix_list)
-		cur_tagetIDX = str2double(regexprep(target_prefix_list{i_target_IDX}, 'target', ''));
+		cur_targetIDX = str2double(regexprep(target_prefix_list{i_target_IDX}, 'target', ''));
 		cur_col_name = [target_prefix_list{i_target_IDX}, '_cur_target_IDX'];
-		record2D_table.(cur_col_name)(:) = cur_tagetIDX;
+		record2D_table.(cur_col_name)(:) = cur_targetIDX;
 	end
 end
+
 
 
 
@@ -171,7 +173,7 @@ end
 target_state_change_struct = [];
 for i_target_IDX = 1 : length(target_prefix_list)
 	disp(['Processing ', target_prefix_list{i_target_IDX}]);
-	cur_tagetIDX = str2double(regexprep(target_prefix_list{i_target_IDX}, 'target', ''));
+	cur_targetIDX = str2double(regexprep(target_prefix_list{i_target_IDX}, 'target', ''));
 	cur_col_name = [target_prefix_list{i_target_IDX}, '_target_state'];
 	cur_data_col = record2D_table.(cur_col_name);
 	% mark the record2D row indices where a change in state was manifest
@@ -181,11 +183,11 @@ for i_target_IDX = 1 : length(target_prefix_list)
 	for i_target_state_change_idx = 1 : length(cur_target_state_change_idx)
 		cur_change_row_idx = cur_target_state_change_idx(i_target_state_change_idx);
 
-		cur_target_state_change_struct.target_IDX = cur_tagetIDX;
+		cur_target_state_change_struct.target_IDX = cur_targetIDX;
 		cur_target_state_change_struct.target_name = target_prefix_list{i_target_IDX};
 		% we do have targets that can change the id every other trial so
 		% collect the curent id for each state transition
-		cur_target_id = record2D_table.(['target', num2str(cur_tagetIDX), '_id'])(cur_change_row_idx);
+		cur_target_id = record2D_table.(['target', num2str(cur_targetIDX), '_id'])(cur_change_row_idx);
 		target_id_name_cell = enum_struct.target_id.name_list(find(enum_struct.target_id.value_list == cur_target_id));
 		cur_target_state_change_struct.target_id = cur_target_id;
 		cur_target_state_change_struct.target_id_name = target_id_name_cell{1};
@@ -255,6 +257,15 @@ for i_target_IDX = 1 : length(target_prefix_list)
 			end
 		end
 
+		% add wether agent0 or agent1 is collecting
+		for i_agent = 1 : length(agent_prefix_list)
+			cur_target_state_change_struct.(['target', '_collecting_by_', agent_prefix_list{i_agent}]) = NaN;
+			cur_agent_record2D_col_name = ['target', num2str(cur_targetIDX), '_collecting_by_', agent_prefix_list{i_agent}];
+			if ismember({cur_agent_record2D_col_name}, record2D_table.Properties.VariableNames)
+				cur_target_state_change_struct.(['target', '_collecting_by_', agent_prefix_list{i_agent}]) = record2D_table.(cur_agent_record2D_col_name)(cur_change_row_idx);
+			end
+		end
+
 		if isempty(target_state_change_struct)
 			target_state_change_struct = cur_target_state_change_struct;
 		else
@@ -266,9 +277,138 @@ end
 target_state_transition_table = struct2table(target_state_change_struct, 'AsArray', 1);
 
 
-[sorted_target_state_transition_table_tick_idx, sorted_target_state_transition_table_idx] = sort(target_state_transition_table.tick_idx, 'ascend');
+[~, sorted_target_state_transition_table_idx] = sort(target_state_transition_table.tick_idx, 'ascend');
 
 sorted_target_state_transition_table = target_state_transition_table(sorted_target_state_transition_table_idx, :);
+
+
+
+% record2D fixup for targetN_collecting_agentN, this wants to operate on sorted_target_state_transition_table
+% find *_cur_target_IDX and check whether these are wrong (that is do not match the target)
+MATCH_cur_target_IDX_idx = find(contains(record2D_colname_list, ["target" + digitsPattern + "_collecting_by_agent" + digitsPattern]), 1);
+if isempty(MATCH_cur_target_IDX_idx)
+	% we need to synthesize the targetN_collecting_by_agentM columns in
+	% record2D
+	for i_target_IDX = 1 : length(target_prefix_list)
+		cur_targetIDX = str2double(regexprep(target_prefix_list{i_target_IDX}, 'target', ''));
+		cur_target_prefix = target_prefix_list{i_target_IDX};
+		cur_col_name_stem = [target_prefix_list{i_target_IDX}, '_collecting_by_'];
+
+		% we only need to add these once
+		for i_agent = 1 : length(agent_prefix_list)
+			if sum(contains(record2D_table.Properties.VariableNames, [cur_col_name_stem, agent_prefix_list{i_agent}])) == 0
+				record2D_table.([cur_col_name_stem, agent_prefix_list{i_agent}]) = zeros(size(record2D_table.timestamp));
+			end
+		end
+
+		% track collection state per target, so extract information for
+		% this target only
+		cur_target_state_changes_ldx = sorted_target_state_transition_table.target_IDX == cur_targetIDX;
+		cur_target_sorted_target_state_transition_table = sorted_target_state_transition_table(cur_target_state_changes_ldx, :);
+		% collecting_agent always starts with a transition 
+		% waiting_for_agent -> collecting
+		cur_target_collecting_agent_start_ldx = ismember(cur_target_sorted_target_state_transition_table.old_state_ENUM_name, {'waiting_for_agent'}) & ismember(cur_target_sorted_target_state_transition_table.new_state_ENUM_name, {'collecting'});
+		cur_target_collecting_agent_start_idx = find(cur_target_collecting_agent_start_ldx);
+
+		% not elegant but let's loop over these start_indices to find the
+		% matching stop indices
+		for i_target_collecting_agent_start = 1 : length(cur_target_collecting_agent_start_idx)
+			cur_cur_target_collecting_agent_start_idx = cur_target_collecting_agent_start_idx(i_target_collecting_agent_start);
+			cur_target_collecting_agent_start_tick_idx = cur_target_sorted_target_state_transition_table.tick_idx(cur_cur_target_collecting_agent_start_idx);
+
+			% for this target
+			% next find the next collection end point
+			% the next transition collecting->waiting_for_agent
+			cur_target_collecting_abort_idx = find(ismember(cur_target_sorted_target_state_transition_table.old_state_ENUM_name, {'collecting'}) & ismember(cur_target_sorted_target_state_transition_table.new_state_ENUM_name, {'waiting_for_agent'}));
+			% or pre_acquisition->waiting_for_agent
+			cur_target_collecting_successful_end_idx = find(ismember(cur_target_sorted_target_state_transition_table.old_state_ENUM_name, {'pre_acquisition'}) & ismember(cur_target_sorted_target_state_transition_table.new_state_ENUM_name, {'waiting_for_agent'}));
+
+			% for both exit points find the first occurrence in
+			% cur_target_sorted_target_state_transition_table after cur_cur_target_collecting_agent_start_idx
+			next_cur_target_collecting_abort_idx = cur_target_collecting_abort_idx(find(cur_target_collecting_abort_idx > cur_cur_target_collecting_agent_start_idx, 1, 'first'));
+			next_cur_target_collecting_successful_end_idx = cur_target_collecting_successful_end_idx(find(cur_target_collecting_successful_end_idx > cur_cur_target_collecting_agent_start_idx, 1, 'first'));
+
+			% the nearest must be the one that ended that collection
+			cur_target_collecting_agent_end_idx = min([next_cur_target_collecting_abort_idx, next_cur_target_collecting_successful_end_idx]);
+			if (i_target_collecting_agent_start < length(cur_target_collecting_agent_start_idx)) && cur_target_collecting_agent_end_idx >= cur_target_collecting_agent_start_idx(i_target_collecting_agent_start + 1)
+				error('The exit state transition happens after the next start transition, which should not happen...');
+			end
+			cur_target_collecting_agent_end_tick_idx = cur_target_sorted_target_state_transition_table.tick_idx(cur_target_collecting_agent_end_idx);
+			if isempty(cur_target_collecting_agent_end_tick_idx)
+				% can happen at the very end if a collection is never
+				% finished, pick the last existing tick_idx 
+				if (i_target_collecting_agent_start == length(cur_target_collecting_agent_start_idx))
+					cur_target_collecting_agent_end_tick_idx = n_record2D_rows;
+				else
+					% investigate
+					keyboard
+				end
+			end
+
+			% we still need to identify the collecting agent(s)
+			agent0_on_target = 	cur_target_sorted_target_state_transition_table.agent0_on_target(cur_cur_target_collecting_agent_start_idx);
+			agent1_on_target = 	cur_target_sorted_target_state_transition_table.agent1_on_target(cur_cur_target_collecting_agent_start_idx);
+			if (agent0_on_target) && ~(agent1_on_target)
+				cur_agent_prefix_list = {'agent0'};	% unambiguous
+			elseif ~(agent0_on_target) && (agent1_on_target)
+				cur_agent_prefix_list = {'agent1'};	% unambiguous
+			elseif  (agent0_on_target) && (agent1_on_target)
+				% this should only happen for cooperative targets, so error out for other target_id...
+				if ismember(cur_target_sorted_target_state_transition_table.target_id_name(cur_cur_target_collecting_agent_start_idx), {'cooperative_targets_type_0', 'cooperative_targets_type_1'})
+					cur_agent_prefix_list = {'agent0', 'agent1'};
+				else
+					error('competitive and punishing targets only allow one collecting agent');
+				end
+			elseif  ~(agent0_on_target) && ~(agent1_on_target)
+				cur_agent_prefix_list = {};
+				error('This should not happen');
+			end
+
+			% now add the missing data columns and fill the respective
+			% ranges between cur_target_collecting_agent_start_tick_idx and
+			% cur_target_collecting_agent_end_tick_idx
+			for i_agent = 1 : length(cur_agent_prefix_list)
+				cur_agent_prefix = cur_agent_prefix_list{i_agent};	% THIS IS THE CURSOR, NOT THE HAND/FINGER, but the cursor triggers collection...
+				cur_col_name = [cur_col_name_stem, cur_agent_prefix];
+				record2D_table.(cur_col_name)(cur_target_collecting_agent_start_tick_idx:cur_target_collecting_agent_end_tick_idx) = 1;
+			end
+		end
+	end
+
+
+	%update the target state change tables as well
+	for i_row = 1 : size(target_state_transition_table, 1)
+		cur_record2D_tick_idx = target_state_transition_table.tick_idx(i_row);
+
+		% add wether agent0 or agent1 is collecting
+		for i_agent = 1 : length(agent_prefix_list)
+			cur_target_state_change_table_col_name = (['target', '_collecting_by_', agent_prefix_list{i_agent}]);
+			cur_agent_record2D_col_name = [target_state_transition_table.target_name{i_row}, '_collecting_by_', agent_prefix_list{i_agent}];
+			if ismember({cur_agent_record2D_col_name}, record2D_table.Properties.VariableNames)
+				 target_state_transition_table.(cur_target_state_change_table_col_name)(i_row) = record2D_table.(cur_agent_record2D_col_name)(cur_record2D_tick_idx); 
+			end
+		end
+	end
+
+	for i_row = 1 : size(sorted_target_state_transition_table, 1)
+		cur_record2D_tick_idx = sorted_target_state_transition_table.tick_idx(i_row);
+
+		% add wether agent0 or agent1 is collecting
+		for i_agent = 1 : length(agent_prefix_list)
+			cur_target_state_change_table_col_name = (['target', '_collecting_by_', agent_prefix_list{i_agent}]);
+			cur_agent_record2D_col_name = [sorted_target_state_transition_table.target_name{i_row}, '_collecting_by_', agent_prefix_list{i_agent}];
+			if ismember({cur_agent_record2D_col_name}, record2D_table.Properties.VariableNames)
+				 sorted_target_state_transition_table.(cur_target_state_change_table_col_name)(i_row) = record2D_table.(cur_agent_record2D_col_name)(cur_record2D_tick_idx); 
+			end
+		end
+	end
+end
+
+
+
+
+
+
 
 
 % now find the trial start and end information by hooking into the
@@ -319,48 +459,140 @@ for i_target_states = 2 : length(enum_struct.target_state.name_list)
 	cur_target_state_name = enum_struct.target_state.name_list{i_target_states};
 	triallog_table.(['collected_target_', cur_target_state_name, '_start_s']) = nan(size(triallog_table.collection_num));
 	triallog_table.(['collected_target_', cur_target_state_name, '_tick_idx']) = nan(size(triallog_table.collection_num));
+
+	triallog_table.(['collected_target_', cur_target_state_name, '_aims0_XY']) = nan([size(triallog_table.collection_num, 1), 2]);
+	triallog_table.(['collected_target_', cur_target_state_name, '_agent0_XY']) = nan([size(triallog_table.collection_num, 1), 2]);
+	triallog_table.(['collected_target_', cur_target_state_name, '_aims1_XY']) = nan([size(triallog_table.collection_num, 1), 2]);
+	triallog_table.(['collected_target_', cur_target_state_name, '_agent1_XY']) = nan([size(triallog_table.collection_num, 1), 2]);
 end
+
+
+% we want to always cover all states? so add the exhautive list to the
+% front before running unique
+tmp_state_name_list = [enum_struct.target_state.name_list'; sorted_target_state_transition_table.new_state_ENUM_name];
+[unique_target_state_name_list, ~, proto_unique_target_state_name_list_row_idx] = unique(tmp_state_name_list, 'stable');
+% now chop the beginimg off, so we are back to the actual occuring states
+%unique_target_state_name_list_row_idx = proto_unique_target_state_name_list_row_idx(length(enum_struct.target_state.name_list)+1:end);
+
+%now the same for target_IDX, but that is variable per session
+[unique_target_IDX_list, ~, proto_unique_target_IDX_list_row_idx] = unique(sorted_target_state_transition_table.target_IDX, 'stable');
+
+% create the respective ldx
+for i_unique_target_IDX = 1 : length(unique_target_IDX_list)
+	unique_target_IDX_struct.(['target_IDX_', num2str(unique_target_IDX_list(i_unique_target_IDX)), '_ldx']) = proto_unique_target_IDX_list_row_idx == i_unique_target_IDX;
+end
+
 
 
 % this is the rewarded target (as only that will be in initiate_reward state), so we can make a few assumptions
 for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transition_idx)
+	% this is in the sorted_target_state_transition_table
 	cur_initiate_reward_start_transition_idx = initiate_reward_start_transition_idx(i_initiate_reward_start_transition);
 
-	sorted_target_state_transition_table(cur_initiate_reward_start_transition_idx, :)
+	sorted_target_state_transition_table(cur_initiate_reward_start_transition_idx, :);
 	cur_collection_num = sorted_target_state_transition_table.cur_collection_num(cur_initiate_reward_start_transition_idx);
 	
 	% get the true index into the triallog table
-	cur_trial_num = cur_collection_num; % initiate_reward happens after the co;llection counter is increased, and that starts with zero
+	cur_trial_num = cur_collection_num; % initiate_reward happens after the collection counter is increased, and that starts with zero
 	if ~(cur_trial_num == i_initiate_reward_start_transition)
 		disp('Should this happen? Please, investigate...');
 		keyboard
 	end
 
 	cur_target_IDX = sorted_target_state_transition_table.target_IDX(cur_initiate_reward_start_transition_idx);
+	cur_target_IDX_ldx = unique_target_IDX_struct.(['target_IDX_', num2str(cur_target_IDX), '_ldx']);
+	
 	triallog_table.collected_target_IDX(cur_trial_num) = cur_target_IDX;
 	triallog_table.collected_target_id(cur_trial_num) = sorted_target_state_transition_table.target_id(cur_initiate_reward_start_transition_idx);
 
 	cur_record2D_idx = sorted_target_state_transition_table.tick_idx(cur_initiate_reward_start_transition_idx);
-	cur_targetid_name = sorted_target_state_transition_table.target_id_name{i_initiate_reward_start_transition};
+	cur_targetid_name = sorted_target_state_transition_table.target_id_name{cur_initiate_reward_start_transition_idx};
 	triallog_table.collected_target_id_name(cur_trial_num) = {cur_targetid_name};
+
+	% which agent(s) are collecting the target:
+	agent0_is_collecting_cur_target = record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent0'])(cur_record2D_idx);
+	agent1_is_collecting_cur_target = record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent1'])(cur_record2D_idx);
+
+	% this should only happen at the last collection, as we are in initiate
+	%_reward
+	if ~agent0_is_collecting_cur_target &&  ~agent1_is_collecting_cur_target
+		if (cur_initiate_reward_start_transition_idx == initiate_reward_start_transition_idx(end))
+			% likely fine
+			keyboard
+		else
+			error('Should not happen? Please, investigate...');
+		end
+	end
+
+	triallog_table.collected_by_A(cur_trial_num) = agent0_is_collecting_cur_target;
+	triallog_table.collected_by_B(cur_trial_num) = agent1_is_collecting_cur_target;
+
+
+
+	% within the current collected target find the state transitions
+	% related to the rewarded collection
+	agent0_is_collecting_cur_target_list = record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent0'])(:);
+	agent1_is_collecting_cur_target_list = record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent1'])(:);
+	
+	% for joint targets both agents will show identical collections, for
+	% comp targets only the first occupying agent will show something
+	any_agent_is_collecting_cur_target_ldx = agent0_is_collecting_cur_target_list | agent1_is_collecting_cur_target_list;
+
+	% cur_record2D_idx will be somewhere in the middle of a cosecutive run
+	% of ones
+	% search for the start_tick_idx
+	proto_start_tick_idx = cur_record2D_idx;
+	while (any_agent_is_collecting_cur_target_ldx(proto_start_tick_idx) == 1)
+		proto_start_tick_idx = proto_start_tick_idx - 1;
+	end
+	cur_collecting_agent_start_tick_idx = proto_start_tick_idx + 1;
+
+	proto_end_tick_idx = cur_record2D_idx;
+	while (any_agent_is_collecting_cur_target_ldx(proto_end_tick_idx) == 1)
+		proto_end_tick_idx = proto_end_tick_idx + 1;
+	end
+	cur_collecting_agent_end_tick_idx = proto_end_tick_idx - 1;
+	% this information to the triallog_table
+	triallog_table.collecting_by_agent_start_timestamp_s(cur_trial_num) = record2D_table.timestamp(cur_collecting_agent_start_tick_idx);
+	triallog_table.collecting_by_agent_start_tick_idx(cur_trial_num) = cur_collecting_agent_start_tick_idx;
+	triallog_table.collecting_by_agent_end_timestamp_s(cur_trial_num) = record2D_table.timestamp(cur_collecting_agent_end_tick_idx);
+	triallog_table.collecting_by_agent_end_tick_idx(cur_trial_num) = cur_collecting_agent_end_tick_idx;
 
 	% the collected target position
 	triallog_table.collected_target_position_XY(cur_trial_num, :) = sorted_target_state_transition_table.cur_target_pos_XY{cur_initiate_reward_start_transition_idx};
 
+	% now reduce the set of state changes to the relevant ones
+	cur_state_change_candidate_ldx = cur_target_IDX_ldx & ((sorted_target_state_transition_table.tick_idx >= cur_collecting_agent_start_tick_idx) & (sorted_target_state_transition_table.tick_idx <= cur_collecting_agent_end_tick_idx));
+
+	cur_collection_target_state_transition_table = sorted_target_state_transition_table(cur_state_change_candidate_ldx, :);
 
 	% add the timestamps and record2D_idx for all state transitions of the
 	% collected target
-
 	% target_state 1 is NONE...
-	for i_target_states = 2 : length(enum_struct.target_state.name_list)
-		cur_target_state_name = enum_struct.target_state.name_list{i_target_states};
+	for i_target_states = 2 : length(unique_target_state_name_list)
+		cur_target_state_name = unique_target_state_name_list{i_target_states};
+		%cur_target_state_sorted_target_state_transition_table_ldx = unique_target_state_name_list_row_idx == i_target_states
 
-		%collecting and wait_for_agent can repeat, so only pick the last
+		cur_collection_substate_ldx = ismember(cur_collection_target_state_transition_table.new_state_ENUM_name, {cur_target_state_name});
+		cur_collection_substate_idx = find(cur_collection_substate_ldx);
 
+		% this can be empty and we simply keep the preallocated values
+		if (length(cur_collection_substate_idx) == 1)
+			local_cur_record2D_idx = cur_collection_target_state_transition_table.tick_idx(cur_collection_substate_idx);
 
+			triallog_table.(['collected_target_', cur_target_state_name, '_start_s'])(cur_trial_num) = record2D_table.timestamp(local_cur_record2D_idx);	% TODO or use tick_timestamp from sorted_target_state_transition_table
+			triallog_table.(['collected_target_', cur_target_state_name, '_tick_idx'])(cur_trial_num) = local_cur_record2D_idx;
 
-		triallog_table.(['collected_target_', cur_target_state_name, '_start_s'])(cur_trial_num)
-		triallog_table.(['collected_target_', cur_target_state_name, '_tick_idx'])(cur_trial_num)
+			% add the aim and agent positions as well at the state transitions?
+			triallog_table.(['collected_target_', cur_target_state_name, '_aims0_XY'])(cur_trial_num, :) = [record2D_table.aims0_X(local_cur_record2D_idx); record2D_table.aims0_X(local_cur_record2D_idx)];
+			triallog_table.(['collected_target_', cur_target_state_name, '_agent0_XY'])(cur_trial_num, :) = [record2D_table.agent0_X(local_cur_record2D_idx); record2D_table.agent0_X(local_cur_record2D_idx)];
+			triallog_table.(['collected_target_', cur_target_state_name, '_aims1_XY'])(cur_trial_num, :) = [record2D_table.aims1_X(local_cur_record2D_idx); record2D_table.aims1_X(local_cur_record2D_idx)];
+			triallog_table.(['collected_target_', cur_target_state_name, '_agent1_XY'])(cur_trial_num, :) = [record2D_table.agent1_X(local_cur_record2D_idx); record2D_table.agent1_X(local_cur_record2D_idx)];
+		elseif (length(cur_collection_substate_idx) > 1)
+			%OK, what is happening here
+			disp('What is hapening here?, please investigate');
+			keyboard
+		end
 	end
 
 
@@ -384,31 +616,31 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 	switch cur_targetid_name
 		case {'cooperative_targets_type_0', 'cooperative_targets_type_1'}
 			triallog_table.collection_type(cur_trial_num) = {'joint'};
-			triallog_table.collected_by_A(cur_trial_num) = 1;
-			triallog_table.collected_by_B(cur_trial_num) = 1;
+			%triallog_table.collected_by_A(cur_trial_num) = 1;
+			%triallog_table.collected_by_B(cur_trial_num) = 1;
 
 		case {'competitive_targets', 'punishing_targets'}
 			triallog_table.collection_type(cur_trial_num) = {'single'};
 			% figure out the collecting agent, this is ambiguous
 			if (triallog_table.Reward_A(cur_trial_num) > 0) && (triallog_table.Reward_B(cur_trial_num) == 0)
-				triallog_table.collected_by_A(cur_trial_num) = 1;
-				triallog_table.collected_by_B(cur_trial_num) = 0;
+				%triallog_table.collected_by_A(cur_trial_num) = 1;
+				%triallog_table.collected_by_B(cur_trial_num) = 0;
 			elseif (triallog_table.Reward_A(cur_trial_num) == 0) && (triallog_table.Reward_B(cur_trial_num) > 0)
-				triallog_table.collected_by_A(cur_trial_num) = 0;
-				triallog_table.collected_by_B(cur_trial_num) = 1;
+				%triallog_table.collected_by_A(cur_trial_num) = 0;
+				%triallog_table.collected_by_B(cur_trial_num) = 1;
 			else
 				error([mfilename, ': this is not supposed to happen, please investigate...']);
 			end
 
 		case {'solo_targets_type_0'}
 			triallog_table.collection_type(cur_trial_num) = {'solo_0'};
-			triallog_table.collected_by_A(cur_trial_num) = 1;
-			triallog_table.collected_by_B(cur_trial_num) = 0;
+			%triallog_table.collected_by_A(cur_trial_num) = 1;
+			%triallog_table.collected_by_B(cur_trial_num) = 0;
 
 		case {'solo_targets_type_1'}
 			triallog_table.collection_type(cur_trial_num) = {'solo_1'};
-			triallog_table.collected_by_A(cur_trial_num) = 0;
-			triallog_table.collected_by_B(cur_trial_num) = 1;
+			%triallog_table.collected_by_A(cur_trial_num) = 0;
+			%triallog_table.collected_by_B(cur_trial_num) = 1;
 	end
 
 	% find the previous pre_acquisition start if it exists (is missing for the first trial) 
@@ -417,7 +649,7 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 	while true
 		cur_transition_search_idx = cur_transition_search_idx - 1;
 		%check whether we reached the begining
-		if cur_transition_srearch_idx == 0
+		if cur_transition_search_idx == 0
 			% use the first timestamp, or nan?
 			triallog_table.trial_start_timestamp_s(cur_trial_num) = record2D_table.timestamp(1);
 			triallog_table.trial_start_tick_idx(cur_trial_num) = 1;
@@ -440,26 +672,20 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 	while true
 		cur_transition_search_idx = cur_transition_search_idx + 1;
 		%check whether we reached the end
-		if cur_transition_srearch_idx > size(sorted_target_state_transition_table, 1)
+		if cur_transition_search_idx > size(sorted_target_state_transition_table, 1)
 			% use the first timestamp, or nan?
 			triallog_table.trial_end_timestamp_s(cur_trial_num) = record2D_table.timestamp(end);
 			triallog_table.trial_end_tick_idx(cur_trial_num) = size(record2D_table, 1);
 			break
 		end
 		% we want a specific transition for the current IDX
-		if (sorted_target_state_transition_table.collected_target_IDX(cur_transition_search_idx) == sorted_target_state_transition_table.collected_target_IDX(cur_initiate_reward_start_transition_idx)) ...
+		if (sorted_target_state_transition_table.target_IDX(cur_transition_search_idx) == sorted_target_state_transition_table.target_IDX(cur_initiate_reward_start_transition_idx)) ...
 			&& (contains(sorted_target_state_transition_table.old_state_ENUM_name(cur_transition_search_idx), 'rewarding') && contains(sorted_target_state_transition_table.new_state_ENUM_name(cur_transition_search_idx), 'pre_acquisition'))
 			triallog_table.trial_end_timestamp_s(cur_trial_num) = sorted_target_state_transition_table.tick_timestamp(cur_transition_search_idx);
 			triallog_table.trial_end_tick_idx(cur_trial_num) = sorted_target_state_transition_table.tick_idx(cur_transition_search_idx);
 			break
 		end
 	end
-
-
-
-
-
-
 end
 %triallog_table
 
