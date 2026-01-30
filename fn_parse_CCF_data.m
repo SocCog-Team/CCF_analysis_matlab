@@ -45,7 +45,7 @@ photodiode_AI_analog_threshold_V = 2.5;	% give it some slack
 
 
 
-if ~exist('CCF_run_folder_FQN_list', 'var') || isempty(CCF_run_folder_FQN_list)
+if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_list)
 	% (venv_py3.10) root@LC38836:/home/smoeller@dpz.lokal/SCP_CODE/TASKS/foraging_task_2_NHP/src#
 	CCF_recordings_folder_FQN = fullfile('~', 'SCP_CODE', 'TASKS', 'foraging_task_2_NHP', 'recordings');
 	cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '101_000', '0');
