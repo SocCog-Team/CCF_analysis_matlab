@@ -226,6 +226,10 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		record2D_struct.header = json_struct.record2D_header.record2D_column_names';
 		record2D_struct.table = squeeze(h5_struct.record2D_data)';
 		record2D_table = array2table(record2D_struct.table, 'VariableNames', record2D_struct.header);
+
+		record2D_table = fn_amend_record2D_table(record2D_table, json_struct.conf);
+
+
 	else
 		disp(['No record2D data found in ', cur_CCF_runfolder_FQN]);
 	end
@@ -322,7 +326,8 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		
 		% THIS is WRONG, as it only reports for agent0, needs a proper per
 		% target report
-		[unique_reward_magnitudes, ~, unique_reward_magnitudes_row_idx] = unique(A0.collection_magnitude_tick_ldx);
+		[unique_reward_magnitudes_A, ~, unique_reward_magnitudes_A_row_idx] = unique(A0.collection_magnitude_tick_ldx);
+		[unique_reward_magnitudes_B, ~, unique_reward_magnitudes_B_row_idx] = unique(B1.collection_magnitude_tick_ldx);
 		% count the occurrances
 		total_collections = record2D_struct.table(end, ismember(record2D_struct.header, {'n_finished_collections'}));
 		total_duration_s = record2D_struct.table(end, ismember(record2D_struct.header, {'timestamp'})) - record2D_struct.table(1, ismember(record2D_struct.header, {'timestamp'}));
@@ -341,17 +346,27 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		% for this we need to calcuulate distances between agents and targets
 
 		% TODO replace by iterating over targets
-		for i_unique_rewards = 1 : length(unique_reward_magnitudes)
-			cur_reward_magnitude = unique_reward_magnitudes(i_unique_rewards);
+		for i_unique_rewards_A = 1 : length(unique_reward_magnitudes_A)
+			cur_reward_magnitude_A = unique_reward_magnitudes_A(i_unique_rewards_A);
 			%disp(['Reward magnitude ', num2str(cur_reward_magnitude)]);
-			if cur_reward_magnitude == 0
+			if cur_reward_magnitude_A == 0
 				%disp('Reward magnitude 0, skipping');
 				continue
 			end
-			cur_reward_magnitude_n_collections = sum(unique_reward_magnitudes_row_idx == i_unique_rewards);
-			cur_reward_magnitude_n_collections_ratio = cur_reward_magnitude_n_collections / total_collections;
-			disp(['Reward magnitude ', num2str(cur_reward_magnitude), '; n_colllections: ', num2str(cur_reward_magnitude_n_collections), ' of ', num2str(total_collections), ': ', num2str(100*cur_reward_magnitude_n_collections_ratio, '%0.1f'), '%']);
-
+			cur_reward_magnitude_A_n_collections = sum(unique_reward_magnitudes_A_row_idx == i_unique_rewards_A);
+			cur_reward_magnitude_A_n_collections_ratio = cur_reward_magnitude_A_n_collections / total_collections;
+			disp(['A0: Reward magnitude ', num2str(cur_reward_magnitude_A), '; n_colllections: ', num2str(cur_reward_magnitude_A_n_collections), ' of ', num2str(total_collections), ': ', num2str(100*cur_reward_magnitude_A_n_collections_ratio, '%0.1f'), '%']);
+		end
+		for i_unique_rewards_B = 1 : length(unique_reward_magnitudes_B)
+			cur_reward_magnitude_B = unique_reward_magnitudes_B(i_unique_rewards_B);
+			%disp(['Reward magnitude ', num2str(cur_reward_magnitude)]);
+			if cur_reward_magnitude_B == 0
+				%disp('Reward magnitude 0, skipping');
+				continue
+			end
+			cur_reward_magnitude_B_n_collections = sum(unique_reward_magnitudes_B_row_idx == i_unique_rewards_B);
+			cur_reward_magnitude_B_n_collections_ratio = cur_reward_magnitude_B_n_collections / total_collections;
+			disp(['B1: Reward magnitude ', num2str(cur_reward_magnitude_B), '; n_colllections: ', num2str(cur_reward_magnitude_B_n_collections), ' of ', num2str(total_collections), ': ', num2str(100*cur_reward_magnitude_B_n_collections_ratio, '%0.1f'), '%']);
 		end
 	end
 

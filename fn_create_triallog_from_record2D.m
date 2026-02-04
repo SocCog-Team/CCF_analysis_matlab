@@ -18,6 +18,10 @@ nan_out_invalid_aims_pos = 1;	% nan out aim positions when agent was not touchin
 nan_out_invalid_agent_pos = 1;	% nan out agent (cursor) positions when agent was not touching
 calc_and_store_distances_to_targets = 1;
 
+% the final trial/collection(s) might not run all the way to completion of
+% the pre_acquisition stage
+drop_trailing_trials_without_target_replacement = 1;
+
 
 triallog_table = [];
 sorted_target_state_transition_table = [];
@@ -26,6 +30,30 @@ record2D_colname_list = record2D_table.Properties.VariableNames;
 
 agent_prefix_list = {'agent0', 'agent1'};
 aims_prefix_list = {'aims0', 'aims1'};
+
+% the number of aims in a run is not fixed, so detect it...
+aim_prefix_list ={};
+for i_col = 1 : length(record2D_colname_list)
+	cur_col_name = record2D_colname_list{i_col};
+	cur_aim_prefix_cell = regexp(cur_col_name, '^aims\d*', 'match');
+	if ~isempty(cur_aim_prefix_cell)
+		aim_prefix_list = [aim_prefix_list, cur_aim_prefix_cell{1}];
+	end
+end
+aim_prefix_list = unique(aim_prefix_list);
+aims_prefix_list = aim_prefix_list;
+
+% the number of aims in a run is not fixed, so detect it...
+agent_prefix_list ={};
+for i_col = 1 : length(record2D_colname_list)
+	cur_col_name = record2D_colname_list{i_col};
+	cur_agent_prefix_cell = regexp(cur_col_name, '^agent\d*', 'match');
+	if ~isempty(cur_agent_prefix_cell)
+		agent_prefix_list = [agent_prefix_list, cur_agent_prefix_cell{1}];
+	end
+end
+agent_prefix_list = unique(agent_prefix_list);
+
 
 % the number of targets in a run is not fixed, so detect it...
 target_prefix_list ={};
@@ -613,6 +641,12 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 	% now reduce the set of state changes to the relevant ones
 	cur_state_change_candidate_ldx = cur_target_IDX_ldx & ((sorted_target_state_transition_table.tick_idx >= cur_collecting_agent_start_tick_idx) & (sorted_target_state_transition_table.tick_idx <= cur_collecting_agent_end_tick_idx));
 
+	% we want the initial waiting_for_agent, so we need to add this to the
+	% set
+	last_waiting_for_agent_state_idx = find(cur_target_IDX_ldx & (sorted_target_state_transition_table.tick_idx <= cur_collecting_agent_end_tick_idx) & ismember(sorted_target_state_transition_table.new_state_ENUM_name, {'waiting_for_agent'}), 1, 'last');
+	cur_state_change_candidate_ldx(last_waiting_for_agent_state_idx) = true;
+
+	% now reduce to the set
 	cur_collection_target_state_transition_table = sorted_target_state_transition_table(cur_state_change_candidate_ldx, :);
 
 	% add the timestamps and record2D_idx for all state transitions of the
@@ -670,38 +704,60 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 		agent_IDX = str2double(regexprep(cur_agent, 'agent', ''));
 		agent_side_prefix_list = {'A', 'B'};
 
-		for i_aims = 1 : length(aims_prefix_list)
-			cur_aims = aims_prefix_list{i_aims};
-			aims_IDX = str2double(regexprep(cur_aims, 'aims', ''));
-
-			
-
-			% find when the agent entered the target (will differ between agents on cooperation targets)
-			cur_agentN_on_collected_target_name = [cur_agent, '_on_target', num2str(cur_target_IDX)];
-			out_cur_agentN_on_collected_target_name = [agent_side_prefix_list{i_agent}, '_agent_on_collected_target'];
-			cur_record2D_tick_idx = fn_find_next_change_in_logical(record2D_table.(cur_agentN_on_collected_target_name), local_cur_record2D_idx, -1);
-			if (record2D_table.(cur_agentN_on_collected_target_name)(local_cur_record2D_idx))
-				triallog_table.([out_cur_agentN_on_collected_target_name, '_start_timestamp_s'])(cur_trial_num) = record2D_table.timestamp(cur_record2D_tick_idx);	% TODO or use tick_timestamp from sorted_target_state_transition_table
-				triallog_table.([out_cur_agentN_on_collected_target_name, '_start_tick_idx'])(cur_trial_num) = cur_record2D_tick_idx;	% TODO or use tick_timestamp from sorted_target_state_transition_table
-			else
-				triallog_table.([out_cur_agentN_on_collected_target_name, '_start_timestamp_s'])(cur_trial_num) = NaN;	% TODO or use tick_timestamp from sorted_target_state_transition_table
-				triallog_table.([out_cur_agentN_on_collected_target_name, '_start_tick_idx'])(cur_trial_num) = NaN;	% TODO or use tick_timestamp from sorted_target_state_transition_table
+		% find when the agent entered the target (will differ between agents on cooperation targets)
+		cur_agentN_on_collected_target_name = [cur_agent, '_on_target', num2str(cur_target_IDX)];
+		out_cur_agentN_on_collected_target_name = [agent_side_prefix_list{i_agent}, '_agent_on_collected_target'];
+		agent_cur_record2D_tick_idx = fn_find_next_change_in_logical(record2D_table.(cur_agentN_on_collected_target_name), cur_record2D_idx, -1);
+		if (record2D_table.(cur_agentN_on_collected_target_name)(cur_record2D_idx))
+			triallog_table.([out_cur_agentN_on_collected_target_name, '_start_timestamp_s'])(cur_trial_num) = record2D_table.timestamp(agent_cur_record2D_tick_idx);	% TODO or use tick_timestamp from sorted_target_state_transition_table
+			triallog_table.([out_cur_agentN_on_collected_target_name, '_start_tick_idx'])(cur_trial_num) = agent_cur_record2D_tick_idx;	% TODO or use tick_timestamp from sorted_target_state_transition_table
+		else
+			triallog_table.([out_cur_agentN_on_collected_target_name, '_start_timestamp_s'])(cur_trial_num) = NaN;	% TODO or use tick_timestamp from sorted_target_state_transition_table
+			triallog_table.([out_cur_agentN_on_collected_target_name, '_start_tick_idx'])(cur_trial_num) = NaN;	% TODO or use tick_timestamp from sorted_target_state_transition_table
+		end
+		% we expect to find all collecting agents to be on target at
+		% initialise_reward (or at the very leat one tick earlier,
+		% otherwise the collection should have not finished.
+		if ~(record2D_table.(cur_agentN_on_collected_target_name)(cur_record2D_idx)) 
+			if agent0_is_collecting_cur_target && (agent_IDX == 0)
+				disp('Debug, me...');
+			elseif agent1_is_collecting_cur_target && (agent_IDX == 1)
+				disp('Debug, me...');
 			end
+		end
 
-			% find when the agent entered the target (will differ between agents on cooperation targets)
-			cur_aimsN_on_collected_target_name = [cur_aims, '_on_target', num2str(cur_target_IDX)];
-			out_cur_aimsN_on_collected_target_name = [agent_side_prefix_list{i_agent}, '_aims_on_collected_target'];
-			cur_record2D_tick_idx = fn_find_next_change_in_logical(record2D_table.(cur_aimsN_on_collected_target_name), local_cur_record2D_idx, -1);
-			if (record2D_table.(cur_aimsN_on_collected_target_name)(local_cur_record2D_idx))
-				triallog_table.([out_cur_aimsN_on_collected_target_name, '_start_timestamp_s'])(cur_trial_num) = record2D_table.timestamp(cur_record2D_tick_idx);	% TODO or use tick_timestamp from sorted_target_state_transition_table
-				triallog_table.([out_cur_aimsN_on_collected_target_name, '_start_tick_idx'])(cur_trial_num) = cur_record2D_tick_idx;	% TODO or use tick_timestamp from sorted_target_state_transition_table
-			else
+	end
+
+	for i_aims = 1 : length(aims_prefix_list)
+		cur_aims = aims_prefix_list{i_aims};
+		aims_IDX = str2double(regexprep(cur_aims, 'aims', ''));
+		aims_side_prefix_list =  {'A', 'B'};
+		out_cur_agentN_on_collected_target_name = [aims_side_prefix_list{i_aims}, '_agent_on_collected_target'];
+
+
+		% find when the agent entered the target (will differ between agents on cooperation targets)
+		cur_aimsN_on_collected_target_name = [cur_aims, '_on_target', num2str(cur_target_IDX)];
+		out_cur_aimsN_on_collected_target_name = [aims_side_prefix_list{i_aims}, '_aims_on_collected_target'];
+		aims_cur_record2D_tick_idx = fn_find_next_change_in_logical(record2D_table.(cur_aimsN_on_collected_target_name), cur_record2D_idx, -1);
+		% make sure the aim is on the collected target
+		if (record2D_table.(cur_aimsN_on_collected_target_name)(cur_record2D_idx))
+			triallog_table.([out_cur_aimsN_on_collected_target_name, '_start_timestamp_s'])(cur_trial_num) = record2D_table.timestamp(aims_cur_record2D_tick_idx);	% TODO or use tick_timestamp from sorted_target_state_transition_table
+			triallog_table.([out_cur_aimsN_on_collected_target_name, '_start_tick_idx'])(cur_trial_num) = aims_cur_record2D_tick_idx;	% TODO or use tick_timestamp from sorted_target_state_transition_table
+		else
+			% the aim can already be off the target (albeit still on the touchpanel), it is the agent
+			% position that counts
+			%if isnan(triallog_table.([out_cur_agentN_on_collected_target_name, '_start_timestamp_s'])(cur_trial_num))
 				triallog_table.([out_cur_aimsN_on_collected_target_name, '_start_timestamp_s'])(cur_trial_num) = NaN;	% TODO or use tick_timestamp from sorted_target_state_transition_table
 				triallog_table.([out_cur_aimsN_on_collected_target_name, '_start_tick_idx'])(cur_trial_num) = NaN;	% TODO or use tick_timestamp from sorted_target_state_transition_table
+			%end
+			%if ~isnan(triallog_table.([out_cur_agentN_on_collected_target_name, '_start_timestamp_s'])(cur_trial_num)) || (agent0_is_collecting_cur_target && aims_IDX == 0) || (agent1_is_collecting_cur_target && aims_IDX == 1)
+			if(agent0_is_collecting_cur_target && aims_IDX == 0) || (agent1_is_collecting_cur_target && aims_IDX == 1)
+				disp('Debug me...');
 			end
-
 		end
+
 	end
+
 
 
 
@@ -797,6 +853,15 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 	end
 end
 %triallog_table
+
+
+% the last trial/trials might be unfinished. To reduce the set to complete
+% trials, allow to remove such tables from the triallog file
+if (drop_trailing_trials_without_target_replacement)
+	disp([mfilename, ': WARN: removing incomplete ttrials without target_state pre_acquisition start']);
+	orig_triallog_table = triallog_table;
+	triallog_table = triallog_table(~isnan(triallog_table.collected_target_pre_acquisition_tick_idx), :);
+end
 
 
 % Trial start stop ts
