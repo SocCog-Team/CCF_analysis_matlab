@@ -26,6 +26,8 @@ for i_tick_idx = 1 : length(cur_tick_idx_list)
 	% find the fixations around the current tick index
 	previous_fixation_idx = find(cur_fixations_struct.fix_end_idx < cur_tick_idx, 1 ,'last');
 	next_fixation_idx = find(cur_fixations_struct.fix_onset_idx > cur_tick_idx, 1 ,'first');
+	% not guaranteed to exist, but if it exists it must be sandwiched
+	% between the previous and next fixation
 	if (next_fixation_idx - previous_fixation_idx == 2)
 		cur_fixation_idx = previous_fixation_idx + 1;
 	else
