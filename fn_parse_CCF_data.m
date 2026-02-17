@@ -64,7 +64,10 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 	% Y:\SCP_DATA\SCP-CTRL-01\SESSIONLOGS\2025\251205\20251205T185226.A_NONE.B_NONE.SCP_01.sessiondir\TDT\SCP_DAG_v26_PZ5ms-251205-185203
 	cur_CCF_runfolder_FQN_list = {...
 		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251205', '20251205T185226.A_NONE.B_NONE.SCP_01.sessiondir') ...
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251216', '20251216T114536.A_NONE.B_NONE.SCP_01.sessiondir') ...
+		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251216', '20251216T114536.A_NONE.B_NONE.SCP_01.sessiondir') ...
+		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260204', '20260204T104914.A_Elmo.B_JL.SCP_01.sessiondir') ...
+		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260204', '20260204T112256.A_Elmo.B_JL.SCP_01.sessiondir') ...		
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260204', '20260204T115759.A_Elmo.B_JL.SCP_01.sessiondir') ...
 		};
 	%cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '000_000', '19');
 
@@ -227,7 +230,15 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		record2D_struct.table = squeeze(h5_struct.record2D_data)';
 		record2D_table = array2table(record2D_struct.table, 'VariableNames', record2D_struct.header);
 
-		record2D_table = fn_amend_record2D_table(record2D_table, json_struct.conf);
+
+		request_list = {'nan_out_invalid_aims_pos', 'nan_out_invalid_agent_pos', ...
+		'calc_and_store_distances_to_targets', ...
+		'detect_agent_fixations', 'detect_aim_fixations', ...	% needs fixing
+		};
+
+		max_dispersion_threshold = json_struct.conf.target_radius/2; % potentially define this in millimeter?
+		min_fixation_duration_threshold_ms = 100; 
+		[record2D_table, fixations_struct] = fn_amend_record2D_table(record2D_table, json_struct.conf, request_list, max_dispersion_threshold, min_fixation_duration_threshold_ms);
 
 
 	else
@@ -244,7 +255,9 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		else
 			target_radius = [];
 		end
-		[triallog_table, record2D_table] = fn_create_triallog_from_record2D(record2D_table, enum_struct, target_radius);
+		[triallog_table, record2D_table, sorted_target_state_transition_table] = fn_create_triallog_from_record2D(record2D_table, enum_struct, target_radius);
+		% We need this later...
+		[first2second_time_conversion_struct, second2first_time_conversion_struct, time_conversion_struct] = fn_create_timing_conversion_struct('CCF_timestamps', triallog_table.collection_start_s, 'CCF_ticks', triallog_table.collection_start_tick_idx);
 	end
 
 	% add the reward information per collection
@@ -270,7 +283,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 		mean_DI_sampling_interval_s =  mean(diff(DI_samples_timestamp_list));
 		DI_samples_table = fn_convert_header_table_timestamp_list_struct_to_table(DI_samples_struct);
-		DI_samples_collection_num_list = fn_create_feature_list_from_id_start_end_ts_lists(DI_samples_timestamp_list, triallog_table.collection_num, triallog_table.collection_start_timestamp_s, [triallog_table.collection_start_timestamp_s(2:end) - (0.1 * mean_DI_sampling_interval_s); triallog_table.collection_end_timestamp_s(end)]);
+		DI_samples_collection_num_list = fn_create_feature_list_from_id_start_end_ts_lists(DI_samples_timestamp_list, triallog_table.collection_num, triallog_table.collection_start_s, [triallog_table.collection_start_s(2:end) - (0.1 * mean_DI_sampling_interval_s); triallog_table.collection_end_s(end)]);
 		DI_samples_table = addvars(DI_samples_table, DI_samples_collection_num_list, 'NewVariableNames', 'collection_num');
 	end
 
@@ -282,7 +295,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		fn_save_figure(AI_timing_fh, cur_CCF_runfolder_FQN, 'AI_sampling_timestamp_control_plot.pdf');
 		mean_AI_sampling_interval_s =  mean(diff(AI_samples_timestamp_list));
 		AI_samples_table = fn_convert_header_table_timestamp_list_struct_to_table(AI_samples_struct);
-		AI_samples_collection_num_list = fn_create_feature_list_from_id_start_end_ts_lists(AI_samples_timestamp_list, triallog_table.collection_num, triallog_table.collection_start_timestamp_s, [triallog_table.collection_start_timestamp_s(2:end) - (0.1 * mean_AI_sampling_interval_s); triallog_table.collection_end_timestamp_s(end)]);
+		AI_samples_collection_num_list = fn_create_feature_list_from_id_start_end_ts_lists(AI_samples_timestamp_list, triallog_table.collection_num, triallog_table.collection_start_s, [triallog_table.collection_start_s(2:end) - (0.1 * mean_AI_sampling_interval_s); triallog_table.collection_end_s(end)]);
 		AI_samples_table = addvars(AI_samples_table, AI_samples_collection_num_list, 'NewVariableNames', 'collection_num');
 
 		% process the photodiode information and correct the timing in the
@@ -294,16 +307,45 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		% add columns to the for PDD_onset_timestamp_s and
 		% PDD_offset_timestamp_s for the matching collection
 		% numbers
-		triallog_table = addvars(triallog_table, nan(size(triallog_table.collection_start_timestamp_s)), nan(size(triallog_table.collection_start_timestamp_s)), 'NewVariableNames', {'PDD_onset_timestamp_s', 'PDD_offset_timestamp_s'});
-		triallog_table.PDD_onset_timestamp_s(onset_offset_events_struct.pd_block_onset_collection_num_list + 1) = onset_offset_events_struct.pd_block_onset_s_list;
+		triallog_table = addvars(triallog_table, nan(size(triallog_table.collection_start_s)), nan(size(triallog_table.collection_start_s)), 'NewVariableNames', {'PDD_onset_s', 'PDD_offset_s'});
+		triallog_table.PDD_onset_s(onset_offset_events_struct.pd_block_onset_collection_num_list + 1) = onset_offset_events_struct.pd_block_onset_s_list;
+		triallog_table.PDD_onset_tick_idx = fn_convert_time_between_named_timebases(triallog_table.PDD_onset_s, time_conversion_struct, 'CCF_timestamps', 'CCF_ticks');
+		triallog_table.PDD_onset_tick_idx = round(triallog_table.PDD_onset_tick_idx);
+
+		% the times when CCF thought the stiumuls changed.. that is the tick_idx when the backend/target repositioned itself.
+		%	 fromn then it takes time to percolate to the ui/target state
+		%	 change, rendering and transmission to the OLED and final
+		%	 display on the screen
+		any_target_changed_pos_ldx = record2D_table.target0_changed_pos | record2D_table.target1_changed_pos | record2D_table.target2_changed_pos;
+		any_target_changed_pos_idx = find(any_target_changed_pos_ldx);
+
 		% he next is correct, but these are lagging behind by a numbre of
 		% samples as we first increase the collection counter before we
 		% change the stimulus...
 		%triallog_table.PDD_offset_timestamp_s(onset_offset_events_struct.pd_block_offset_collection_num_list + 1) = onset_offset_events_struct.pd_block_offset_s_list;
 		% so we account that for the pd_block_onset_collection_num_list as
 		% otherwise in each collection the offset preceds the onset (which is technically correct, but undesired here for the per collection table)
-		triallog_table.PDD_offset_timestamp_s(onset_offset_events_struct.pd_block_onset_collection_num_list + 1) = onset_offset_events_struct.pd_block_offset_s_list;
+		triallog_table.PDD_offset_s(onset_offset_events_struct.pd_block_onset_collection_num_list + 1) = onset_offset_events_struct.pd_block_offset_s_list;
+		triallog_table.PDD_offset_tick_idx = fn_convert_time_between_named_timebases(triallog_table.PDD_offset_s, time_conversion_struct, 'CCF_timestamps', 'CCF_ticks');
+		triallog_table.PDD_offset_tick_idx = round(triallog_table.PDD_offset_tick_idx);
+
 	end
+
+
+	% add reach/gaze position data to the triallog_table
+	tmp_state_name_list = [enum_struct.target_state.name_list'; sorted_target_state_transition_table.new_state_ENUM_name];
+	[unique_target_state_name_list, ~, proto_unique_target_state_name_list_row_idx] = unique(tmp_state_name_list, 'stable');
+	tick_idx_list_list = cell(size(unique_target_state_name_list));
+	for i_target_states = 2 : length(unique_target_state_name_list)
+		cur_target_state_name = unique_target_state_name_list{i_target_states};
+		cur_target_state_col_name = ['col_targ_', cur_target_state_name, '_tick_idx'];
+		tick_idx_list_list(i_target_states) = {cur_target_state_col_name};
+	end
+	tick_idx_list_list(1) = [];	% we started from entry 2 to skip NONE
+	tick_idx_list_list = [tick_idx_list_list; 'PDD_onset_tick_idx'];
+	tick_idx_ext = '_tick_idx';
+	[ triallog_table ] = fn_collect_fixations_around_tick_idx_lists( triallog_table, fixations_struct, record2D_table, tick_idx_list_list, tick_idx_ext);
+
 
 
 
