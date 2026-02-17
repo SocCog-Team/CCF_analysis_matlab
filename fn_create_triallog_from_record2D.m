@@ -7,20 +7,20 @@ function [ triallog_table, record2D_table, sorted_target_state_transition_table 
 % datetime(1765881936.97264, 'convertfrom', 'posixtime', 'Format', 'yyyyMMdd HH:mm:ss.SSS');
 
 
+
 timestamps.(mfilename).start = tic;
 disp(['Starting: ', mfilename]);
 dbstop if error
 fq_mfilename = mfilename('fullpath');
 
 
-% useful but currently slow, exclude for development for now
-nan_out_invalid_aims_pos = 1;	% nan out aim positions when agent was not touching
-nan_out_invalid_agent_pos = 1;	% nan out agent (cursor) positions when agent was not touching
-calc_and_store_distances_to_targets = 1;
+% % % useful but currently slow, exclude for development for now
+% % calc_and_store_distances_to_targets = 1;
 
 % the final trial/collection(s) might not run all the way to completion of
 % the pre_acquisition stage
-drop_trailing_trials_without_target_replacement = 1;
+% this is better done in SCP_ephys_base_analysis_CCF
+drop_trailing_trials_without_target_replacement = 0;
 
 
 triallog_table = [];
@@ -28,6 +28,8 @@ sorted_target_state_transition_table = [];
 
 record2D_colname_list = record2D_table.Properties.VariableNames;
 
+
+% move to helper function?
 agent_prefix_list = {'agent0', 'agent1'};
 aims_prefix_list = {'aims0', 'aims1'};
 
@@ -81,121 +83,12 @@ triallog_table = addvars(triallog_table, (unique_collection_list + 1), 'NewVaria
 
 
 % COLLECTION START / END
-triallog_table = addvars(triallog_table, record2D_table.timestamp(first_instance_of_collection_num_idx), 'NewVariableNames', 'collection_start_timestamp_s');
-triallog_table = addvars(triallog_table, record2D_table.timestamp([first_instance_of_collection_num_idx(2:end)-1; size(record2D_table, 1)]), 'NewVariableNames', 'collection_end_timestamp_s');	% collection is incremented between finishing the collection duration and dispensing the rewards
+triallog_table = addvars(triallog_table, record2D_table.timestamp(first_instance_of_collection_num_idx), 'NewVariableNames', 'collection_start_s');
+triallog_table = addvars(triallog_table, record2D_table.timestamp([first_instance_of_collection_num_idx(2:end)-1; size(record2D_table, 1)]), 'NewVariableNames', 'collection_end_s');	% collection is incremented between finishing the collection duration and dispensing the rewards
 % having per collection indices for record2D available can be helpful down
 % the road, e.g to select touch and cursor traces per collection...
-triallog_table = addvars(triallog_table, first_instance_of_collection_num_idx, 'NewVariableNames', 'collection_start_record2D_idx');
-triallog_table = addvars(triallog_table, [first_instance_of_collection_num_idx(2:end)-1; size(record2D_table, 1)], 'NewVariableNames', 'collection_end_record2D_idx');
-
-
-% columns to add (always for A0 and B1):
-% REWARD
-% new_triallog_table_column_stem_list = {'_RewPulses_TASK', '_RewPulses_MANUAL', '_RewTrain_Start_ts_s', '_RewTrain_adjStart_ts_s', '_RewTrain_End_ts_s'};
-%	A0_reward_train_onset, A0_n_rewards_TASK, A0_n_rewards_MANUAL	% these
-%	get created from jsonl_struct.reward_trains and are added later to the
-%	existing triallog_table...
-
-
-% AGENT
-
-% FIXUP record2D_table
-
-% we need to clean up a bit. by removing the aims when an agent is not
-% touching
-agent0_is_touching_ldx = record2D_table.agent0_is_touching == 1;
-agent1_is_touching_ldx = record2D_table.agent1_is_touching == 1;
-if (nan_out_invalid_aims_pos)
-	% use nan as marker for invalid positions?
-	record2D_table.aims0_X(~agent0_is_touching_ldx) = nan;
-	record2D_table.aims0_Y(~agent0_is_touching_ldx) = nan;
-	record2D_table.aims1_X(~agent1_is_touching_ldx) = nan;
-	record2D_table.aims1_Y(~agent1_is_touching_ldx) = nan;
-end
-if (nan_out_invalid_agent_pos)
-	% use nan as marker for invalid positions?
-	record2D_table.agent0_X(~agent0_is_touching_ldx) = nan;
-	record2D_table.agent0_Y(~agent0_is_touching_ldx) = nan;
-	record2D_table.agent1_X(~agent1_is_touching_ldx) = nan;
-	record2D_table.agent1_Y(~agent1_is_touching_ldx) = nan;
-end
-
-% also add columns for each target whether aims/agents are touching a
-% target, this takes a while...
-if ~isempty(target_radius) && (calc_and_store_distances_to_targets)
-	timestamps.(mfilename).start_on_target = tic;
-	for i_target_IDX = 1 : length(target_prefix_list)
-		%disp(['Processing ', target_prefix_list{i_target_IDX}]);
-		cur_target_stem = target_prefix_list{i_target_IDX};
-
-		cur_target_pos_XY_list = [record2D_table.([cur_target_stem, '_X'])(:), record2D_table.([cur_target_stem, '_Y'])(:)];
-		cur_prefix_list = {'aims0', 'agent0', 'aims1', 'agent1'};
-		for i_cur_prefix = 1 : length(cur_prefix_list)
-			cur_prefix = cur_prefix_list{i_cur_prefix};
-			cur_new_col_name = ['distance_', cur_prefix, '_to_', cur_target_stem];
-			% if isempty(on_target_struct2) || ~isfield(on_target_struct2, cur_new_col_name)
-			% 	on_target_struct2.(cur_new_col_name) = logical(zeros(size(record2D_table.timestamp)));
-			% end
-			cur_prefix_pos_XY_list = [record2D_table.([cur_prefix, '_X'])(:), record2D_table.([cur_prefix, '_Y'])(:)];
-			record2D_table.(cur_new_col_name) = vecnorm((cur_target_pos_XY_list - cur_prefix_pos_XY_list), 2, 2);	% way faster than calling norm row by row...
-			record2D_table.([cur_prefix, '_on_', cur_target_stem]) = record2D_table.(cur_new_col_name) < target_radius;
-		end
-	end
-	timestamps.(mfilename).end_on_target = toc(timestamps.(mfilename).start_on_target);
-	%disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end_on_target), ' seconds.']);
-end
-
-% TARGETS
-% since we have no target jsonl log (yet) we need to deduce this from the 2D
-% table... which is less than ideal, but....
-% add the target positions (X, Y) and whether target position changed from
-% previous trial or was changed in current trial
-
-% the numeral in targetN is the sequence number, this is fixed
-target_IDX_list = nan(size(target_prefix_list));
-target_id_list = target_IDX_list;
-target_id_name_list = {};
-for i_target_IDX = 1 : length(target_prefix_list)
-	cur_targetIDX = str2double(regexprep(target_prefix_list{i_target_IDX}, 'target', ''));
-	target_IDX_list(i_target_IDX) = cur_targetIDX;
-	unique_target_IDX = unique(record2D_table.([target_prefix_list{i_target_IDX}, '_id']));
-	if ~isempty(unique_target_IDX) && length(unique_target_IDX) < 2
-		target_id_list(i_target_IDX) = unique_target_IDX;
-		% target_id can change for special targets, so we need to extract
-		% that trial by trial...
-		cur_target_IDX_unique_target_id_list = unique(record2D_table.(['target', num2str(cur_targetIDX), '_id']));
-		target_id_name_list(i_target_IDX) = enum_struct.target_id.name_list(find(enum_struct.target_id.value_list == cur_target_IDX_unique_target_id_list));
-	end
-	if ~isempty(unique_target_IDX) && length(unique_target_IDX) > 1
-		%target_id_list(i_target_IDX) = unique_target_id;	% we can not
-		%meaning fully merge numeric id
-		target_id_name_list(i_target_IDX) = strjoin(enum_struct.target_id.name_list(find(enum_struct.target_id.value_list == cur_target_IDX_unique_target_id_list)), '_');	% but we can merge names...
-	end
-end
-
-
-% find *_cur_target_IDX and check whether these are wrong (that is do not match the target)
-MATCH_cur_target_IDX_idx = find(contains(record2D_colname_list, ["target" + digitsPattern + "_cur_target_IDX"]));
-cur_target_IDX_cols_need_fixup = 0;
-for i_match_col = 1 : length(MATCH_cur_target_IDX_idx)
-	cur_last_cur_target_IDX_value = record2D_table.(record2D_colname_list{MATCH_cur_target_IDX_idx(i_match_col)})(1);
-	if cur_last_cur_target_IDX_value ~= (i_match_col - 1)
-		cur_target_IDX_cols_need_fixup = 1;
-		break
-	end
-end
-
-if (cur_target_IDX_cols_need_fixup)
-	% some early record2D files have incorrect cur_target_IDX values (all 1s)
-	for i_target_IDX = 1 : length(target_prefix_list)
-		cur_targetIDX = str2double(regexprep(target_prefix_list{i_target_IDX}, 'target', ''));
-		cur_col_name = [target_prefix_list{i_target_IDX}, '_cur_target_IDX'];
-		record2D_table.(cur_col_name)(:) = cur_targetIDX;
-	end
-end
-
-
-
+triallog_table = addvars(triallog_table, first_instance_of_collection_num_idx, 'NewVariableNames', 'collection_start_tick_idx');
+triallog_table = addvars(triallog_table, [first_instance_of_collection_num_idx(2:end)-1; size(record2D_table, 1)], 'NewVariableNames', 'collection_end_tick_idx');
 
 
 % this arguably should come from a jsonl file, but since we stored the
@@ -325,10 +218,19 @@ if isempty(MATCH_cur_target_IDX_idx)
 		cur_target_prefix = target_prefix_list{i_target_IDX};
 		cur_col_name_stem = [target_prefix_list{i_target_IDX}, '_collecting_by_'];
 
+		% add the target change detection here, as we really only need these later on to compile per trial information
+		cur_new_col_name = [cur_target_prefix, '_changed_pos'];
+		cur_target_pos_XY_list = [record2D_table.([cur_target_prefix, '_X'])(:), record2D_table.([cur_target_prefix, '_Y'])(:)];
+		% get the distance betwenn samples
+		cur_sample_by_sample_distance = [1 ; vecnorm((cur_target_pos_XY_list(2:end, :) - cur_target_pos_XY_list(1:end-1, :)), 2, 2)]; % way faster than calling norm row by row...
+		record2D_table.(cur_new_col_name) = cur_sample_by_sample_distance ~= 0;	
+
+
+
 		% we only need to add these once
 		for i_agent = 1 : length(agent_prefix_list)
 			if sum(contains(record2D_table.Properties.VariableNames, [cur_col_name_stem, agent_prefix_list{i_agent}])) == 0
-				record2D_table.([cur_col_name_stem, agent_prefix_list{i_agent}]) = zeros(size(record2D_table.timestamp));
+				record2D_table.([cur_col_name_stem, agent_prefix_list{i_agent}]) = zeros(size(record2D_table.timestamp));	% move to fn_amaend_record2D_table?
 			end
 		end
 
@@ -400,10 +302,10 @@ if isempty(MATCH_cur_target_IDX_idx)
 					while true
 						next_initiate_reward_state_change_record_idx = next_initiate_reward_state_change_record_idx + 1;
 						if ismember({'initiate_reward'}, cur_target_sorted_target_state_transition_table.new_state_ENUM_name(next_initiate_reward_state_change_record_idx))
-							cur_record2D_idx = cur_target_sorted_target_state_transition_table.tick_idx(next_initiate_reward_state_change_record_idx); 
-							if (record2D_table.([cur_target_prefix, '_rewA0'])(cur_record2D_idx)) && ~(record2D_table.([cur_target_prefix, '_rewB1'])(cur_record2D_idx))
+							cur_tick_idx = cur_target_sorted_target_state_transition_table.tick_idx(next_initiate_reward_state_change_record_idx); 
+							if (record2D_table.([cur_target_prefix, '_rewA0'])(cur_tick_idx)) && ~(record2D_table.([cur_target_prefix, '_rewB1'])(cur_tick_idx))
 								cur_agent_prefix_list = {'agent0'};
-							elseif ~(record2D_table.([cur_target_prefix, '_rewA0'])(cur_record2D_idx)) && (record2D_table.([cur_target_prefix, '_rewB1'])(cur_record2D_idx))
+							elseif ~(record2D_table.([cur_target_prefix, '_rewA0'])(cur_tick_idx)) && (record2D_table.([cur_target_prefix, '_rewB1'])(cur_tick_idx))
 								cur_agent_prefix_list = {'agent1'};
 							else
 								error('competitive and punishing targets only allow one collecting agent');
@@ -490,14 +392,14 @@ initiate_reward_start_transition_idx = find(initiate_reward_start_transition_ldx
 
 % pre allocate a few columns, pre allocate as NaN so unassigned trial
 % values are standing out
-triallog_table.collected_target_IDX = nan(size(triallog_table.collection_num));
-triallog_table.collected_target_id = nan(size(triallog_table.collection_num));
-triallog_table.collected_target_id_name = cell(size(triallog_table.collection_num));
-triallog_table.collected_target_position_XY = nan([size(triallog_table.collection_num, 1), 2]);
+triallog_table.col_targ_IDX = nan(size(triallog_table.collection_num));
+triallog_table.col_targ_id = nan(size(triallog_table.collection_num));
+triallog_table.col_targ_id_name = cell(size(triallog_table.collection_num));
+triallog_table.col_targ_position_XY = nan([size(triallog_table.collection_num, 1), 2]);
 
 % this need some finesse to cover a meaningfull period
-triallog_table.trial_start_timestamp_s = nan(size(triallog_table.collection_num));
-triallog_table.trial_end_timestamp_s = nan(size(triallog_table.collection_num));
+triallog_table.trial_start_s = nan(size(triallog_table.collection_num));
+triallog_table.trial_end_s = nan(size(triallog_table.collection_num));
 triallog_table.trial_start_tick_idx = nan(size(triallog_table.collection_num));
 triallog_table.trial_end_tick_idx = nan(size(triallog_table.collection_num));
 
@@ -511,15 +413,17 @@ triallog_table.Reward_B = nan(size(triallog_table.collection_num));
 % first is NONE and that should not exist
 for i_target_states = 2 : length(enum_struct.target_state.name_list)
 	cur_target_state_name = enum_struct.target_state.name_list{i_target_states};
-	triallog_table.(['collected_target_', cur_target_state_name, '_start_s']) = nan(size(triallog_table.collection_num));
-	triallog_table.(['collected_target_', cur_target_state_name, '_tick_idx']) = nan(size(triallog_table.collection_num));
+	triallog_table.(['col_targ_', cur_target_state_name, '_start_s']) = nan(size(triallog_table.collection_num));
+	triallog_table.(['col_targ_', cur_target_state_name, '_tick_idx']) = nan(size(triallog_table.collection_num));
 
-	triallog_table.(['collected_target_', cur_target_state_name, '_aims0_XY']) = nan([size(triallog_table.collection_num, 1), 2]);
-	triallog_table.(['collected_target_', cur_target_state_name, '_agent0_XY']) = nan([size(triallog_table.collection_num, 1), 2]);
-	triallog_table.(['collected_target_', cur_target_state_name, '_aims1_XY']) = nan([size(triallog_table.collection_num, 1), 2]);
-	triallog_table.(['collected_target_', cur_target_state_name, '_agent1_XY']) = nan([size(triallog_table.collection_num, 1), 2]);
+	triallog_table.(['col_targ_', cur_target_state_name, '_aims0_XY']) = nan([size(triallog_table.collection_num, 1), 2]);
+	triallog_table.(['col_targ_', cur_target_state_name, '_agent0_XY']) = nan([size(triallog_table.collection_num, 1), 2]);
+	triallog_table.(['col_targ_', cur_target_state_name, '_aims1_XY']) = nan([size(triallog_table.collection_num, 1), 2]);
+	triallog_table.(['col_targ_', cur_target_state_name, '_agent1_XY']) = nan([size(triallog_table.collection_num, 1), 2]);
 end
 
+
+triallog_table.any_target_changed_pos_at_trial_start = false(size(triallog_table.collection_num));
 
 % we want to always cover all states? so add the exhautive list to the
 % front before running unique
@@ -556,16 +460,16 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 	cur_target_IDX = sorted_target_state_transition_table.target_IDX(cur_initiate_reward_start_transition_idx);
 	cur_target_IDX_ldx = unique_target_IDX_struct.(['target_IDX_', num2str(cur_target_IDX), '_ldx']);
 
-	triallog_table.collected_target_IDX(cur_trial_num) = cur_target_IDX;
-	triallog_table.collected_target_id(cur_trial_num) = sorted_target_state_transition_table.target_id(cur_initiate_reward_start_transition_idx);
+	triallog_table.col_targ_IDX(cur_trial_num) = cur_target_IDX;
+	triallog_table.col_targ_id(cur_trial_num) = sorted_target_state_transition_table.target_id(cur_initiate_reward_start_transition_idx);
 
-	cur_record2D_idx = sorted_target_state_transition_table.tick_idx(cur_initiate_reward_start_transition_idx);
+	cur_tick_idx = sorted_target_state_transition_table.tick_idx(cur_initiate_reward_start_transition_idx);
 	cur_targetid_name = sorted_target_state_transition_table.target_id_name{cur_initiate_reward_start_transition_idx};
-	triallog_table.collected_target_id_name(cur_trial_num) = {cur_targetid_name};
+	triallog_table.col_targ_id_name(cur_trial_num) = {cur_targetid_name};
 
 	% which agent(s) are collecting the target:
-	agent0_is_collecting_cur_target = record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent0'])(cur_record2D_idx);
-	agent1_is_collecting_cur_target = record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent1'])(cur_record2D_idx);
+	agent0_is_collecting_cur_target = record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent0'])(cur_tick_idx);
+	agent1_is_collecting_cur_target = record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent1'])(cur_tick_idx);
 
 	% this should only happen at the last collection, as we are in initiate
 	%_reward
@@ -602,34 +506,34 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 		error('Should not happen, investigate...');
 	end
 
-	% cur_record2D_idx will be somewhere in the middle of a cosecutive run
+	% cur_tick_idx will be somewhere in the middle of a cosecutive run
 	% of ones
 	% search for the start_tick_idx
-	proto_start_tick_idx = cur_record2D_idx;
+	proto_start_tick_idx = cur_tick_idx;
 	while (any_agent_is_collecting_cur_target_ldx(proto_start_tick_idx) == 1)
 		proto_start_tick_idx = proto_start_tick_idx - 1;
 	end
 	cur_collecting_agent_start_tick_idx = proto_start_tick_idx + 1;
 
-	proto_end_tick_idx = cur_record2D_idx;
+	proto_end_tick_idx = cur_tick_idx;
 	% we need to not go past the last tick 
 	while (any_agent_is_collecting_cur_target_ldx(proto_end_tick_idx) == 1) && proto_end_tick_idx < n_record2D_rows
 		proto_end_tick_idx = proto_end_tick_idx + 1; 
 	end
 	cur_collecting_agent_end_tick_idx = proto_end_tick_idx - 1;
 	% this information to the triallog_table
-	triallog_table.collecting_by_agent_start_timestamp_s(cur_trial_num) = record2D_table.timestamp(cur_collecting_agent_start_tick_idx);
+	triallog_table.collecting_by_agent_start_s(cur_trial_num) = record2D_table.timestamp(cur_collecting_agent_start_tick_idx);
 	triallog_table.collecting_by_agent_start_tick_idx(cur_trial_num) = cur_collecting_agent_start_tick_idx;
-	triallog_table.collecting_by_agent_end_timestamp_s(cur_trial_num) = record2D_table.timestamp(cur_collecting_agent_end_tick_idx);
+	triallog_table.collecting_by_agent_end_s(cur_trial_num) = record2D_table.timestamp(cur_collecting_agent_end_tick_idx);
 	triallog_table.collecting_by_agent_end_tick_idx(cur_trial_num) = cur_collecting_agent_end_tick_idx;
 
 	% the collected target position
-	triallog_table.collected_target_position_XY(cur_trial_num, :) = sorted_target_state_transition_table.cur_target_pos_XY{cur_initiate_reward_start_transition_idx};
+	triallog_table.col_targ_position_XY(cur_trial_num, :) = sorted_target_state_transition_table.cur_target_pos_XY{cur_initiate_reward_start_transition_idx};
 
 	% also add the positions of all other targets to the trial log
 	% the other target positions during reward initiation
 	for i_target = 1 : length(target_prefix_list)
-		triallog_table.([target_prefix_list{i_target},'_position_XY'])(cur_trial_num, :) = [record2D_table.([target_prefix_list{i_target}, '_X'])(cur_record2D_idx), record2D_table.([target_prefix_list{i_target}, '_Y'])(cur_record2D_idx)];
+		triallog_table.([target_prefix_list{i_target},'_position_XY'])(cur_trial_num, :) = [record2D_table.([target_prefix_list{i_target}, '_X'])(cur_tick_idx), record2D_table.([target_prefix_list{i_target}, '_Y'])(cur_tick_idx)];
 	end
 	
 
@@ -649,7 +553,7 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 	% now reduce to the set
 	cur_collection_target_state_transition_table = sorted_target_state_transition_table(cur_state_change_candidate_ldx, :);
 
-	% add the timestamps and record2D_idx for all state transitions of the
+	% add the timestamps and tick_idx for all state transitions of the
 	% collected target
 	% target_state 1 is NONE...
 	for i_target_states = 2 : length(unique_target_state_name_list)
@@ -659,7 +563,7 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 		cur_collection_substate_ldx = ismember(cur_collection_target_state_transition_table.new_state_ENUM_name, {cur_target_state_name});
 		cur_collection_substate_idx = find(cur_collection_substate_ldx);
 
-		% handle a few known raesons for multiple occurancesf the same
+		% handle a few known raesons for multiple occurances of the same
 		% state in one collection
 		if length(cur_collection_substate_idx) > 1
 			switch cur_target_state_name
@@ -673,16 +577,16 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 
 		% this can be empty and we simply keep the preallocated values
 		if (length(cur_collection_substate_idx) == 1)
-			local_cur_record2D_idx = cur_collection_target_state_transition_table.tick_idx(cur_collection_substate_idx);
+			local_cur_tick_idx = cur_collection_target_state_transition_table.tick_idx(cur_collection_substate_idx);
 
-			triallog_table.(['collected_target_', cur_target_state_name, '_start_s'])(cur_trial_num) = record2D_table.timestamp(local_cur_record2D_idx);	% TODO or use tick_timestamp from sorted_target_state_transition_table
-			triallog_table.(['collected_target_', cur_target_state_name, '_tick_idx'])(cur_trial_num) = local_cur_record2D_idx;
+			triallog_table.(['col_targ_', cur_target_state_name, '_start_s'])(cur_trial_num) = record2D_table.timestamp(local_cur_tick_idx);	% TODO or use tick_timestamp from sorted_target_state_transition_table
+			triallog_table.(['col_targ_', cur_target_state_name, '_tick_idx'])(cur_trial_num) = local_cur_tick_idx;
 
 			% add the aim and agent positions as well at the state transitions?
-			triallog_table.(['collected_target_', cur_target_state_name, '_aims0_XY'])(cur_trial_num, :) = [record2D_table.aims0_X(local_cur_record2D_idx); record2D_table.aims0_X(local_cur_record2D_idx)];
-			triallog_table.(['collected_target_', cur_target_state_name, '_agent0_XY'])(cur_trial_num, :) = [record2D_table.agent0_X(local_cur_record2D_idx); record2D_table.agent0_X(local_cur_record2D_idx)];
-			triallog_table.(['collected_target_', cur_target_state_name, '_aims1_XY'])(cur_trial_num, :) = [record2D_table.aims1_X(local_cur_record2D_idx); record2D_table.aims1_X(local_cur_record2D_idx)];
-			triallog_table.(['collected_target_', cur_target_state_name, '_agent1_XY'])(cur_trial_num, :) = [record2D_table.agent1_X(local_cur_record2D_idx); record2D_table.agent1_X(local_cur_record2D_idx)];
+			triallog_table.(['col_targ_', cur_target_state_name, '_aims0_XY'])(cur_trial_num, :) = [record2D_table.aims0_X(local_cur_tick_idx); record2D_table.aims0_X(local_cur_tick_idx)];
+			triallog_table.(['col_targ_', cur_target_state_name, '_agent0_XY'])(cur_trial_num, :) = [record2D_table.agent0_X(local_cur_tick_idx); record2D_table.agent0_X(local_cur_tick_idx)];
+			triallog_table.(['col_targ_', cur_target_state_name, '_aims1_XY'])(cur_trial_num, :) = [record2D_table.aims1_X(local_cur_tick_idx); record2D_table.aims1_X(local_cur_tick_idx)];
+			triallog_table.(['col_targ_', cur_target_state_name, '_agent1_XY'])(cur_trial_num, :) = [record2D_table.agent1_X(local_cur_tick_idx); record2D_table.agent1_X(local_cur_tick_idx)];
 		elseif (length(cur_collection_substate_idx) > 1)
 			%OK, what is happening here, mmh, we can have multiple
 			%consecutive attempts at collecting a target that are aborted
@@ -705,20 +609,20 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 		agent_side_prefix_list = {'A', 'B'};
 
 		% find when the agent entered the target (will differ between agents on cooperation targets)
-		cur_agentN_on_collected_target_name = [cur_agent, '_on_target', num2str(cur_target_IDX)];
-		out_cur_agentN_on_collected_target_name = [agent_side_prefix_list{i_agent}, '_agent_on_collected_target'];
-		agent_cur_record2D_tick_idx = fn_find_next_change_in_logical(record2D_table.(cur_agentN_on_collected_target_name), cur_record2D_idx, -1);
-		if (record2D_table.(cur_agentN_on_collected_target_name)(cur_record2D_idx))
-			triallog_table.([out_cur_agentN_on_collected_target_name, '_start_timestamp_s'])(cur_trial_num) = record2D_table.timestamp(agent_cur_record2D_tick_idx);	% TODO or use tick_timestamp from sorted_target_state_transition_table
-			triallog_table.([out_cur_agentN_on_collected_target_name, '_start_tick_idx'])(cur_trial_num) = agent_cur_record2D_tick_idx;	% TODO or use tick_timestamp from sorted_target_state_transition_table
+		cur_agentN_on_col_targ_name = [cur_agent, '_on_target', num2str(cur_target_IDX)];
+		out_cur_agentN_on_col_targ_name = [agent_side_prefix_list{i_agent}, '_agent_on_collected_target'];
+		agent_cur_record2D_tick_idx = fn_find_next_change_in_logical(record2D_table.(cur_agentN_on_col_targ_name), cur_tick_idx, -1);
+		if (record2D_table.(cur_agentN_on_col_targ_name)(cur_tick_idx))
+			triallog_table.([out_cur_agentN_on_col_targ_name, '_start_s'])(cur_trial_num) = record2D_table.timestamp(agent_cur_record2D_tick_idx);	% TODO or use tick_timestamp from sorted_target_state_transition_table
+			triallog_table.([out_cur_agentN_on_col_targ_name, '_start_tick_idx'])(cur_trial_num) = agent_cur_record2D_tick_idx;	% TODO or use tick_timestamp from sorted_target_state_transition_table
 		else
-			triallog_table.([out_cur_agentN_on_collected_target_name, '_start_timestamp_s'])(cur_trial_num) = NaN;	% TODO or use tick_timestamp from sorted_target_state_transition_table
-			triallog_table.([out_cur_agentN_on_collected_target_name, '_start_tick_idx'])(cur_trial_num) = NaN;	% TODO or use tick_timestamp from sorted_target_state_transition_table
+			triallog_table.([out_cur_agentN_on_col_targ_name, '_start_s'])(cur_trial_num) = NaN;	% TODO or use tick_timestamp from sorted_target_state_transition_table
+			triallog_table.([out_cur_agentN_on_col_targ_name, '_start_tick_idx'])(cur_trial_num) = NaN;	% TODO or use tick_timestamp from sorted_target_state_transition_table
 		end
 		% we expect to find all collecting agents to be on target at
 		% initialise_reward (or at the very leat one tick earlier,
 		% otherwise the collection should have not finished.
-		if ~(record2D_table.(cur_agentN_on_collected_target_name)(cur_record2D_idx)) 
+		if ~(record2D_table.(cur_agentN_on_col_targ_name)(cur_tick_idx)) 
 			if agent0_is_collecting_cur_target && (agent_IDX == 0)
 				disp('Debug, me...');
 			elseif agent1_is_collecting_cur_target && (agent_IDX == 1)
@@ -732,25 +636,25 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 		cur_aims = aims_prefix_list{i_aims};
 		aims_IDX = str2double(regexprep(cur_aims, 'aims', ''));
 		aims_side_prefix_list =  {'A', 'B'};
-		out_cur_agentN_on_collected_target_name = [aims_side_prefix_list{i_aims}, '_agent_on_collected_target'];
+		out_cur_agentN_on_col_targ_name = [aims_side_prefix_list{i_aims}, '_agent_on_collected_target'];
 
 
 		% find when the agent entered the target (will differ between agents on cooperation targets)
-		cur_aimsN_on_collected_target_name = [cur_aims, '_on_target', num2str(cur_target_IDX)];
-		out_cur_aimsN_on_collected_target_name = [aims_side_prefix_list{i_aims}, '_aims_on_collected_target'];
-		aims_cur_record2D_tick_idx = fn_find_next_change_in_logical(record2D_table.(cur_aimsN_on_collected_target_name), cur_record2D_idx, -1);
+		cur_aimsN_on_col_targ_name = [cur_aims, '_on_target', num2str(cur_target_IDX)];
+		out_cur_aimsN_on_col_targ_name = [aims_side_prefix_list{i_aims}, '_aims_on_collected_target'];
+		aims_cur_record2D_tick_idx = fn_find_next_change_in_logical(record2D_table.(cur_aimsN_on_col_targ_name), cur_tick_idx, -1);
 		% make sure the aim is on the collected target
-		if (record2D_table.(cur_aimsN_on_collected_target_name)(cur_record2D_idx))
-			triallog_table.([out_cur_aimsN_on_collected_target_name, '_start_timestamp_s'])(cur_trial_num) = record2D_table.timestamp(aims_cur_record2D_tick_idx);	% TODO or use tick_timestamp from sorted_target_state_transition_table
-			triallog_table.([out_cur_aimsN_on_collected_target_name, '_start_tick_idx'])(cur_trial_num) = aims_cur_record2D_tick_idx;	% TODO or use tick_timestamp from sorted_target_state_transition_table
+		if (record2D_table.(cur_aimsN_on_col_targ_name)(cur_tick_idx))
+			triallog_table.([out_cur_aimsN_on_col_targ_name, '_start_s'])(cur_trial_num) = record2D_table.timestamp(aims_cur_record2D_tick_idx);	% TODO or use tick_timestamp from sorted_target_state_transition_table
+			triallog_table.([out_cur_aimsN_on_col_targ_name, '_start_tick_idx'])(cur_trial_num) = aims_cur_record2D_tick_idx;	% TODO or use tick_timestamp from sorted_target_state_transition_table
 		else
 			% the aim can already be off the target (albeit still on the touchpanel), it is the agent
 			% position that counts
-			%if isnan(triallog_table.([out_cur_agentN_on_collected_target_name, '_start_timestamp_s'])(cur_trial_num))
-				triallog_table.([out_cur_aimsN_on_collected_target_name, '_start_timestamp_s'])(cur_trial_num) = NaN;	% TODO or use tick_timestamp from sorted_target_state_transition_table
-				triallog_table.([out_cur_aimsN_on_collected_target_name, '_start_tick_idx'])(cur_trial_num) = NaN;	% TODO or use tick_timestamp from sorted_target_state_transition_table
+			%if isnan(triallog_table.([out_cur_agentN_on_col_targ_name, '_start_s'])(cur_trial_num))
+				triallog_table.([out_cur_aimsN_on_col_targ_name, '_start_s'])(cur_trial_num) = NaN;	% TODO or use tick_timestamp from sorted_target_state_transition_table
+				triallog_table.([out_cur_aimsN_on_col_targ_name, '_start_tick_idx'])(cur_trial_num) = NaN;	% TODO or use tick_timestamp from sorted_target_state_transition_table
 			%end
-			%if ~isnan(triallog_table.([out_cur_agentN_on_collected_target_name, '_start_timestamp_s'])(cur_trial_num)) || (agent0_is_collecting_cur_target && aims_IDX == 0) || (agent1_is_collecting_cur_target && aims_IDX == 1)
+			%if ~isnan(triallog_table.([out_cur_agentN_on_col_targ_name, '_start_s'])(cur_trial_num)) || (agent0_is_collecting_cur_target && aims_IDX == 0) || (agent1_is_collecting_cur_target && aims_IDX == 1)
 			if(agent0_is_collecting_cur_target && aims_IDX == 0) || (agent1_is_collecting_cur_target && aims_IDX == 1)
 				disp('Debug me...');
 			end
@@ -773,8 +677,8 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 	% this comes from the target definitions for the collected target, so
 	% should be correct until we introduce the changing cooperative target
 	% again
-	triallog_table.Reward_A(cur_trial_num) = record2D_table.(['target', num2str(cur_target_IDX), '_rewA0'])(cur_record2D_idx);
-	triallog_table.Reward_B(cur_trial_num) = record2D_table.(['target', num2str(cur_target_IDX), '_rewB1'])(cur_record2D_idx);
+	triallog_table.Reward_A(cur_trial_num) = record2D_table.(['target', num2str(cur_target_IDX), '_rewA0'])(cur_tick_idx);
+	triallog_table.Reward_B(cur_trial_num) = record2D_table.(['target', num2str(cur_target_IDX), '_rewB1'])(cur_tick_idx);
 
 
 
@@ -809,58 +713,98 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 	end
 
 	% find the previous pre_acquisition start if it exists (is missing for the first trial)
-	% trial_start_timestamp_s
+	% trial_start_s
 	cur_transition_search_idx = cur_initiate_reward_start_transition_idx;
 	while true
 		cur_transition_search_idx = cur_transition_search_idx - 1;
 		%check whether we reached the begining
 		if cur_transition_search_idx == 0
 			% use the first timestamp, or nan?
-			triallog_table.trial_start_timestamp_s(cur_trial_num) = record2D_table.timestamp(1);
+			triallog_table.trial_start_s(cur_trial_num) = record2D_table.timestamp(1);
 			triallog_table.trial_start_tick_idx(cur_trial_num) = 1;
 			break
 		end
 		% we are looking for the previous pre_acquisition to end
 		if 	(contains(sorted_target_state_transition_table.old_state_ENUM_name(cur_transition_search_idx), 'pre_acquisition') && contains(sorted_target_state_transition_table.new_state_ENUM_name(cur_transition_search_idx), 'waiting_for_agent'))
 
-			triallog_table.trial_start_timestamp_s(cur_trial_num) = sorted_target_state_transition_table.tick_timestamp(cur_transition_search_idx);
+			triallog_table.trial_start_s(cur_trial_num) = sorted_target_state_transition_table.tick_timestamp(cur_transition_search_idx);
 			triallog_table.trial_start_tick_idx(cur_trial_num) = sorted_target_state_transition_table.tick_idx(cur_transition_search_idx);
 			break
 		end
 	end
 
-	% currently trial_end_timestamp_s(N) equals
-	% trial_start_timestamp_s(N+1), that is we have no
+	% currently trial_end_s(N) equals
+	% trial_start_s(N+1), that is we have no
 	% find the end of the current reward phase
-	%trial_end_timestamp_s
+	%trial_end_s
 	cur_transition_search_idx = cur_initiate_reward_start_transition_idx;
 	while true
 		cur_transition_search_idx = cur_transition_search_idx + 1;
 		%check whether we reached the end
 		if cur_transition_search_idx > size(sorted_target_state_transition_table, 1)
 			% use the first timestamp, or nan?
-			triallog_table.trial_end_timestamp_s(cur_trial_num) = record2D_table.timestamp(end);
+			triallog_table.trial_end_s(cur_trial_num) = record2D_table.timestamp(end);
 			triallog_table.trial_end_tick_idx(cur_trial_num) = size(record2D_table, 1);
 			break
 		end
 		% we want a specific transition for the current IDX
 		if (sorted_target_state_transition_table.target_IDX(cur_transition_search_idx) == sorted_target_state_transition_table.target_IDX(cur_initiate_reward_start_transition_idx)) ...
 				&& (contains(sorted_target_state_transition_table.old_state_ENUM_name(cur_transition_search_idx), 'rewarding') && contains(sorted_target_state_transition_table.new_state_ENUM_name(cur_transition_search_idx), 'pre_acquisition'))
-			triallog_table.trial_end_timestamp_s(cur_trial_num) = sorted_target_state_transition_table.tick_timestamp(cur_transition_search_idx);
+			triallog_table.trial_end_s(cur_trial_num) = sorted_target_state_transition_table.tick_timestamp(cur_transition_search_idx);
 			triallog_table.trial_end_tick_idx(cur_trial_num) = sorted_target_state_transition_table.tick_idx(cur_transition_search_idx);
 			break
 		end
 	end
+
+	% did a target change position in this trial
+	for i_target_IDX = 1 : length(target_prefix_list)
+		cur_targetIDX = str2double(regexprep(target_prefix_list{i_target_IDX}, 'target', ''));
+		cur_target_prefix = target_prefix_list{i_target_IDX};
+		cur_col_name_stem = [target_prefix_list{i_target_IDX}, '_collecting_by_'];
+
+		% add the target change detection here, as we really only need these later on to compile per trial information
+		cur_new_col_name = [cur_target_prefix, '_changed_pos'];
+		cur_target_change_tick_idx = find(record2D_table.(cur_new_col_name));
+	
+		cur_target_changed_in_cur_trial = cur_target_change_tick_idx >= triallog_table.trial_start_tick_idx(cur_trial_num) & ...
+			cur_target_change_tick_idx <= triallog_table.trial_end_tick_idx(cur_trial_num);
+
+		triallog_table.([cur_target_prefix, '_changed_pos_in_trial'])(cur_trial_num) = sum(cur_target_changed_in_cur_trial);	% here we count all position replacements
+		% we want to know about replacement at trial start...
+		if (sum(cur_target_change_tick_idx == triallog_table.trial_start_tick_idx(cur_trial_num)) == 1)
+			triallog_table.any_target_changed_pos_at_trial_start(cur_trial_num) = triallog_table.any_target_changed_pos_at_trial_start(cur_trial_num) | triallog_table.([cur_target_prefix, '_changed_pos_in_trial'])(cur_trial_num);
+		end
+	end
+
+
 end
 %triallog_table
 
+% % TODO detect relevant aim/agent events, like fixation onset and fixation
+% % offset and add timestamp, tick and XY to table
+% moved to fn_collect_fixations_around_tick_idx_list() called from
+% fn_parse_CCF() to allow tick_idx list extracted later...
 
+
+% % the last trial/trials might be unfinished. To reduce the set to complete
+% % trials, allow to remove such tables from the triallog file
+% if (drop_trailing_trials_without_target_replacement)
+% 	disp([mfilename, ': WARN: removing incomplete trials without target_state pre_acquisition start']);
+% 	orig_triallog_table = triallog_table;
+% 	triallog_table = triallog_table(~isnan(triallog_table.col_targ_pre_acquisition_tick_idx), :);
+% end
+
+% this is Igor's criterion
 % the last trial/trials might be unfinished. To reduce the set to complete
-% trials, allow to remove such tables from the triallog file
+% trials,here we want a target replcement at the start of the next trial
 if (drop_trailing_trials_without_target_replacement)
-	disp([mfilename, ': WARN: removing incomplete ttrials without target_state pre_acquisition start']);
+	disp([mfilename, ': WARN: removing incomplete trials without a target replacement at next trial start']);
 	orig_triallog_table = triallog_table;
-	triallog_table = triallog_table(~isnan(triallog_table.collected_target_pre_acquisition_tick_idx), :);
+	proto_idx = find(triallog_table.any_target_changed_pos_at_trial_start)-1;	% these apply to the previous trial
+	if (proto_idx(1) < 1)
+		proto_idx = proto_idx(2:end);
+	end
+	triallog_table = triallog_table(proto_idx, :);
 end
 
 
@@ -883,11 +827,11 @@ end
 
 
 
-%	JOINT: target position_change_times, collected_target_type (JOINT or
+%	JOINT: target position_change_times, col_targ_type (JOINT or
 %	SOLO)
-%	A0_collected_target_id, A0_collected_target_IDX
-%	A0_collected_target_position_X, A0_collected_target_position_Y
-%	A0_collected_target_collecting_state_start_ts,
+%	A0_col_targ_id, A0_col_targ_IDX
+%	A0_col_targ_position_X, A0_col_targ_position_Y
+%	A0_col_targ_collecting_state_start_ts,
 
 % number and sequence of targets visited by each agent position of all
 % targets per position
@@ -895,8 +839,8 @@ end
 
 
 % for debugging
-%triallog_table.collection_start_timestamp_s = triallog_table.collection_start_timestamp_s - start_ts;
-%triallog_table.collection_end_timestamp_s = triallog_table.collection_end_timestamp_s - start_ts;
+%triallog_table.collection_start_s = triallog_table.collection_start_s - start_ts;
+%triallog_table.collection_end_s = triallog_table.collection_end_s - start_ts;
 
 
 % PER TARGET information
