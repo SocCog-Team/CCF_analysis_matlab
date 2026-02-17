@@ -68,6 +68,7 @@ if ~isempty(h5_struct) && ismember({[cur_base_name, '_data']}, fieldnames(h5_str
 			subtitle({['Mean: ', num2str(mean(diff_service_vs_sampling_times_ms)), '; Standard deviation: ', num2str(std(diff_service_vs_sampling_times_ms, 0))], ...
 				['Max: ', num2str(max(diff_service_vs_sampling_times_ms)), '; Min: ', num2str(min(diff_service_vs_sampling_times_ms))], ...
 				['sample interval: ', num2str(time_incremnent_per_sample * 1000), '; sampling rate [Hz]; ', num2str(1/time_incremnent_per_sample)]});
+			xlabel('Time difference [ms]')
 		end
 
 	else
