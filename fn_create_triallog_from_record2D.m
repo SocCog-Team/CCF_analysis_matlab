@@ -610,7 +610,7 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 
 		% find when the agent entered the target (will differ between agents on cooperation targets)
 		cur_agentN_on_col_targ_name = [cur_agent, '_on_target', num2str(cur_target_IDX)];
-		out_cur_agentN_on_col_targ_name = [agent_side_prefix_list{i_agent}, '_agent_on_collected_target'];
+		out_cur_agentN_on_col_targ_name = [agent_side_prefix_list{i_agent}, '_agent_on_col_targ'];
 		agent_cur_record2D_tick_idx = fn_find_next_change_in_logical(record2D_table.(cur_agentN_on_col_targ_name), cur_tick_idx, -1);
 		if (record2D_table.(cur_agentN_on_col_targ_name)(cur_tick_idx))
 			triallog_table.([out_cur_agentN_on_col_targ_name, '_start_s'])(cur_trial_num) = record2D_table.timestamp(agent_cur_record2D_tick_idx);	% TODO or use tick_timestamp from sorted_target_state_transition_table
@@ -636,12 +636,12 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 		cur_aims = aims_prefix_list{i_aims};
 		aims_IDX = str2double(regexprep(cur_aims, 'aims', ''));
 		aims_side_prefix_list =  {'A', 'B'};
-		out_cur_agentN_on_col_targ_name = [aims_side_prefix_list{i_aims}, '_agent_on_collected_target'];
+		out_cur_agentN_on_col_targ_name = [aims_side_prefix_list{i_aims}, '_agent_on_col_targ'];
 
 
 		% find when the agent entered the target (will differ between agents on cooperation targets)
 		cur_aimsN_on_col_targ_name = [cur_aims, '_on_target', num2str(cur_target_IDX)];
-		out_cur_aimsN_on_col_targ_name = [aims_side_prefix_list{i_aims}, '_aims_on_collected_target'];
+		out_cur_aimsN_on_col_targ_name = [aims_side_prefix_list{i_aims}, '_aims_on_col_targ'];
 		aims_cur_record2D_tick_idx = fn_find_next_change_in_logical(record2D_table.(cur_aimsN_on_col_targ_name), cur_tick_idx, -1);
 		% make sure the aim is on the collected target
 		if (record2D_table.(cur_aimsN_on_col_targ_name)(cur_tick_idx))
