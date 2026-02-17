@@ -43,7 +43,7 @@ for i_tick_idx = 1 : length(cur_tick_idx_list)
 	if ~isempty(cur_fixation_idx)
 		cur_fix_onset_idx(i_tick_idx) = cur_fixations_struct.fix_onset_idx(cur_fixation_idx);
 		cur_fix_end_idx(i_tick_idx) = cur_fixations_struct.fix_end_idx(cur_fixation_idx);
-		cur_fix_mean_XY = [cur_fixations_struct.mean_X(cur_fixation_idx), cur_fixations_struct.mean_Y(cur_fixation_idx)];
+		cur_fix_mean_XY(i_tick_idx, :) = [cur_fixations_struct.mean_X(cur_fixation_idx), cur_fixations_struct.mean_Y(cur_fixation_idx)];
 	end
 
 	if ~isempty(next_fixation_idx)
