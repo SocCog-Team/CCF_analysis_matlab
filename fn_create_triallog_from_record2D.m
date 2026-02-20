@@ -91,6 +91,22 @@ triallog_table = addvars(triallog_table, first_instance_of_collection_num_idx, '
 triallog_table = addvars(triallog_table, [first_instance_of_collection_num_idx(2:end)-1; size(record2D_table, 1)], 'NewVariableNames', 'collection_end_tick_idx');
 
 
+% % we need this unconditionally
+% for i_target_IDX = 1 : length(target_prefix_list)
+% 	cur_targetIDX = str2double(regexprep(target_prefix_list{i_target_IDX}, 'target', ''));
+% 	cur_target_prefix = target_prefix_list{i_target_IDX};
+% 	cur_col_name_stem = [target_prefix_list{i_target_IDX}, '_collecting_by_'];
+% 
+% 	% add the target change detection here, as we really only need these later on to compile per trial information
+% 	cur_new_col_name = [cur_target_prefix, '_changed_pos'];
+% 	cur_target_pos_XY_list = [record2D_table.([cur_target_prefix, '_X'])(:), record2D_table.([cur_target_prefix, '_Y'])(:)];
+% 	% get the distance betwenn samples
+% 	cur_sample_by_sample_distance = [1 ; vecnorm((cur_target_pos_XY_list(2:end, :) - cur_target_pos_XY_list(1:end-1, :)), 2, 2)]; % way faster than calling norm row by row...
+% 	record2D_table.(cur_new_col_name) = cur_sample_by_sample_distance ~= 0;
+% end
+
+
+
 % this arguably should come from a jsonl file, but since we stored the
 % states in record2D we can estimate the state transition times
 % collect the target state transitions and colect indices and timestamps
@@ -210,7 +226,11 @@ sorted_target_state_transition_table = target_state_transition_table(sorted_targ
 % record2D fixup for targetN_collecting_agentN, this wants to operate on sorted_target_state_transition_table
 % find *_cur_target_IDX and check whether these are wrong (that is do not match the target)
 MATCH_cur_target_IDX_idx = find(contains(record2D_colname_list, ["target" + digitsPattern + "_collecting_by_agent" + digitsPattern]), 1);
-if isempty(MATCH_cur_target_IDX_idx)
+
+% we do more than just add columns missing in early session log files
+force_collecting_by_processing = 1;
+
+if isempty(MATCH_cur_target_IDX_idx) || force_collecting_by_processing
 	% we need to synthesize the targetN_collecting_by_agentM columns in
 	% record2D
 	for i_target_IDX = 1 : length(target_prefix_list)
@@ -218,12 +238,12 @@ if isempty(MATCH_cur_target_IDX_idx)
 		cur_target_prefix = target_prefix_list{i_target_IDX};
 		cur_col_name_stem = [target_prefix_list{i_target_IDX}, '_collecting_by_'];
 
-		% add the target change detection here, as we really only need these later on to compile per trial information
-		cur_new_col_name = [cur_target_prefix, '_changed_pos'];
-		cur_target_pos_XY_list = [record2D_table.([cur_target_prefix, '_X'])(:), record2D_table.([cur_target_prefix, '_Y'])(:)];
-		% get the distance betwenn samples
-		cur_sample_by_sample_distance = [1 ; vecnorm((cur_target_pos_XY_list(2:end, :) - cur_target_pos_XY_list(1:end-1, :)), 2, 2)]; % way faster than calling norm row by row...
-		record2D_table.(cur_new_col_name) = cur_sample_by_sample_distance ~= 0;	
+		% % % add the target change detection here, as we really only need these later on to compile per trial information
+		% % cur_new_col_name = [cur_target_prefix, '_changed_pos'];
+		% % cur_target_pos_XY_list = [record2D_table.([cur_target_prefix, '_X'])(:), record2D_table.([cur_target_prefix, '_Y'])(:)];
+		% % % get the distance betwenn samples
+		% % cur_sample_by_sample_distance = [1 ; vecnorm((cur_target_pos_XY_list(2:end, :) - cur_target_pos_XY_list(1:end-1, :)), 2, 2)]; % way faster than calling norm row by row...
+		% % record2D_table.(cur_new_col_name) = cur_sample_by_sample_distance ~= 0;	
 
 
 
