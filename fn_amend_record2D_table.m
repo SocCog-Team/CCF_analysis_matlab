@@ -18,6 +18,7 @@ fixations_struct = [];
 if ~exist('request_list', 'var') || isempty(request_list)
 	request_list = {'nan_out_invalid_aims_pos', 'nan_out_invalid_agent_pos', ...
 		'calc_and_store_distances_to_targets', ...
+		'add_per_target_changed_pos_col', ...
 		'detect_agent_fixations', 'detect_aim_fixations'};
 end
 
@@ -152,6 +153,24 @@ if ~isempty(target_radius) && ismember({'calc_and_store_distances_to_targets'}, 
 	end
 	%timestamps.(mfilename).end_on_target = toc(timestamps.(mfilename).start_on_target);
 	%disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end_on_target), ' seconds.']);
+end
+
+
+
+if ismember({'add_per_target_changed_pos_col'}, request_list)
+	% we need this unconditionally
+	for i_target_IDX = 1 : length(target_prefix_list)
+		cur_targetIDX = str2double(regexprep(target_prefix_list{i_target_IDX}, 'target', ''));
+		cur_target_prefix = target_prefix_list{i_target_IDX};
+		cur_col_name_stem = [target_prefix_list{i_target_IDX}, '_collecting_by_'];
+
+		% add the target change detection here, as we really only need these later on to compile per trial information
+		cur_new_col_name = [cur_target_prefix, '_changed_pos'];
+		cur_target_pos_XY_list = [record2D_table.([cur_target_prefix, '_X'])(:), record2D_table.([cur_target_prefix, '_Y'])(:)];
+		% get the distance betwenn samples
+		cur_sample_by_sample_distance = [1 ; vecnorm((cur_target_pos_XY_list(2:end, :) - cur_target_pos_XY_list(1:end-1, :)), 2, 2)]; % way faster than calling norm row by row...
+		record2D_table.(cur_new_col_name) = cur_sample_by_sample_distance ~= 0;
+	end
 end
 
 
