@@ -1,4 +1,4 @@
-function [ triallog_table, record_struct, record2D_struct, AI_samples_struct, DI_samples_struct, json_struct, h5_struct, txt_struct, jsonl_struct, enum_struct ] = fn_parse_CCF_data( cur_CCF_runfolder_FQN_list )
+function [ triallog_table, record_struct, record2D_struct, AI_samples_struct, DI_samples_struct, json_struct, h5_struct, txt_struct, jsonl_struct, enum_struct, fixations_struct ] = fn_parse_CCF_data( cur_CCF_runfolder_FQN_list )
 %FN_PARSE_CCF_DATA Summary of this function goes here
 %   Detailed explanation goes here
 %
@@ -233,6 +233,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 		request_list = {'nan_out_invalid_aims_pos', 'nan_out_invalid_agent_pos', ...
 		'calc_and_store_distances_to_targets', ...
+		'add_per_target_changed_pos_col', ...
 		'detect_agent_fixations', 'detect_aim_fixations', ...	% needs fixing
 		};
 
@@ -240,8 +241,21 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		min_fixation_duration_threshold_ms = 100; 
 		[record2D_table, fixations_struct] = fn_amend_record2D_table(record2D_table, json_struct.conf, request_list, max_dispersion_threshold, min_fixation_duration_threshold_ms);
 
+		% the number of targets in a run is not fixed, so detect it...
+		record2D_colname_list = record2D_table.Properties.VariableNames;
+		target_prefix_list ={};
+		for i_col = 1 : length(record2D_colname_list)
+			cur_col_name = record2D_colname_list{i_col};
+			cur_target_prefix_cell = regexp(cur_col_name, '^target\d*', 'match');
+			if ~isempty(cur_target_prefix_cell)
+				target_prefix_list = [target_prefix_list, cur_target_prefix_cell{1}];
+			end
+		end
+		target_prefix_list = unique(target_prefix_list);
+
 
 	else
+		target_prefix_list = {};
 		disp(['No record2D data found in ', cur_CCF_runfolder_FQN]);
 	end
 
@@ -316,7 +330,16 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		%	 fromn then it takes time to percolate to the ui/target state
 		%	 change, rendering and transmission to the OLED and final
 		%	 display on the screen
-		any_target_changed_pos_ldx = record2D_table.target0_changed_pos | record2D_table.target1_changed_pos | record2D_table.target2_changed_pos;
+
+		% allow for variable numbers of targets...
+		any_target_changed_pos_ldx = false(size(record2D_table.timestamp));
+		for i_target = 1 : length(target_prefix_list)
+			cur_target_changed_name = [target_prefix_list{i_target}, '_changed_pos'];
+			if isfield(record2D_table, cur_target_changed_name)
+				any_target_changed_pos_ldx = any_target_changed_pos_ldx | record2D_table.(cur_target_changed_name);
+			end
+		end
+		%any_target_changed_pos_ldx = record2D_table.target0_changed_pos | record2D_table.target1_changed_pos | record2D_table.target2_changed_pos;
 		any_target_changed_pos_idx = find(any_target_changed_pos_ldx);
 
 		% he next is correct, but these are lagging behind by a numbre of
@@ -425,6 +448,9 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	end
 
 end
+
+% let' export the most coimplete record2D we generated
+record2D_struct = record2D_table;
 
 
 timestamps.(mfilename).end = toc(timestamps.(mfilename).start);
