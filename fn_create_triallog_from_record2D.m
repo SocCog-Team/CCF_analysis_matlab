@@ -621,7 +621,7 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 	% for agent that is the matchin start of the last collection state, but
 	% for aims that will be earlier
 
-	% for all colecting agents add the timestamp and tick_idx when agent
+	% for all collecting agents add the timestamp and tick_idx when agent
 	% and aim acquired the target
 	for i_agent = 1 : length(agent_prefix_list)
 		cur_agent = agent_prefix_list{i_agent};
