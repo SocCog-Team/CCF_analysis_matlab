@@ -92,6 +92,30 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	% the python enums:
 	enum_struct = fn_extract_python_enums(fullfile(cur_CCF_runfolder_FQN, 'enums.py'));
 
+	% find additional information per cycle
+	addition_triallog_per_cycle_info_filename_list = {'movement_to_target.csv'};
+	additional_triallog_column_table = [];
+	for i_additinal_per_cycle_info_FQN = 1 : length(addition_triallog_per_cycle_info_filename_list)
+		cur_additinal_per_cycle_info_FQN = fullfile(cur_CCF_runfolder_FQN, addition_triallog_per_cycle_info_filename_list{i_additinal_per_cycle_info_FQN});
+		if isfile(cur_additinal_per_cycle_info_FQN)
+			[cur_dir, cur_name, cur_ext] = fileparts(cur_additinal_per_cycle_info_FQN);
+			switch cur_ext
+				case {'.csv'}
+					cur_additional_triallog_column_table = readtable(cur_additinal_per_cycle_info_FQN);
+				otherwise
+					error([mfilename, ': unhandled extension: ', cur_ext]);
+			end
+			if isempty(additional_triallog_column_table)
+				additional_triallog_column_table = cur_additional_triallog_column_table;
+			else
+				additional_triallog_column_table = [additional_triallog_column_table, cur_additional_triallog_column_table];	% UNTESTED
+			end
+			disp([mfilename, ': INFO: added additional per cycle information from: ', cur_additinal_per_cycle_info_FQN]);
+		else
+			disp([mfilename, ': did not find data file with additional per_cycle information: ', cur_additinal_per_cycle_info_FQN]);
+		end
+	end
+
 
 	% the json files
 	for i_json_FQN = 1 : length(json_dir_struct)
@@ -371,7 +395,44 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 
 
+	% potentially add additinal per cycle columns
+	if ~isempty(additional_triallog_column_table)
+		existing_table_col_names = triallog_table.Properties.VariableNames;
+		additional_table_col_names = additional_triallog_column_table.Properties.VariableNames;
+		if any(ismember(existing_table_col_names, additional_table_col_names))
+			disp('WARN: Trying to add columns of the same name');
+		end
+		n_existing_rows = size(triallog_table, 1);
+		n_additional_rows = size(additional_triallog_column_table, 1);
+		% if these are equal just add the columns at the end
+		if (n_existing_rows == n_additional_rows)
+			triallog_table = [triallog_table, additional_triallog_column_table];
+		else
+			% now we need to match rows via known matching columns
+			if ismember({'trial_num'}, existing_table_col_names) && ismember({'cycle'}, additional_table_col_names)
+				existing_match_column_name = 'trial_num';
+				additional_match_column_name = 'cycle';
+				for i_additional_column = 1 : length(additional_table_col_names)
+					cur_additonal_column_name = additional_table_col_names{i_additional_column};
+					%cur_additional_data = additional_triallog_column_table.(cur_additonal_column_name);
+					% now loop over all cycles
+					for i_additional_row_idx = 1 : n_additional_rows
+						cur_additional_row_idx = additional_triallog_column_table.(additional_match_column_name)(i_additional_row_idx);
+						%if ~iscell(additional_triallog_column_table.(cur_additonal_column_name)(cur_additional_row_idx))
+							triallog_table.(cur_additonal_column_name)(cur_additional_row_idx) = additional_triallog_column_table.(cur_additonal_column_name)(cur_additional_row_idx);
+						%else
+						%	disp('Doh...');
+						%	triallog_table.(cur_additonal_column_name)(cur_additional_row_idx+1) = additional_triallog_column_table.(cur_additonal_column_name)(cur_additional_row_idx);
+						%end
+					end
+				end
+			else
+				error([mfilename, ': no matching column names found...']);
+			end
 
+		end
+
+	end
 
 
 	% now calculate the distances between the entities and add to table or
