@@ -1,6 +1,12 @@
 function [ triallog_table ] = fn_collect_fixations_around_tick_idx_lists( triallog_table, fixations_struct, record2D_table, tick_idx_col_name_list, tick_idx_ext)
 %FN_COLLECT_FIXATIONS_AROUND_TICK_IDX_LIST Summary of this function goes here
 %   Detailed explanation goes here
+% TODO:
+%	1) optionally use the fiaxtion source's XY position at each
+%	tick_idx_col_name_list item instead of traying to go for the next
+%	fixation
+%	2) optionally pass in validity ranges for valid prev/next fixations,
+%	e.g. to force them to happen within the same cycle
 
 triallog_table = triallog_table;
 
@@ -61,7 +67,7 @@ if ~isempty(fixations_struct)
 			triallog_table.([out_cur_fix_source_name, '_', cur_tick_idx_col_name, '_prev_fix_end_s']) = tmp_tick_timestamp_list(mod_prev_fix_end_idx);
 			triallog_table.([out_cur_fix_source_name, '_', cur_tick_idx_col_name, '_prev_fix_end_tick_idx']) = prev_fix_end_idx;
 			triallog_table.([out_cur_fix_source_name, '_', cur_tick_idx_col_name, '_prev_fix_mean_XY']) = prev_fix_mean_XY;
-			triallog_table.([out_cur_fix_source_name, '_', cur_tick_idx_col_name, '_prev_next_reach_pos']) = cell(size(prev_fix_end_idx));	% relative position of the next fixation...
+			%triallog_table.([out_cur_fix_source_name, '_', cur_tick_idx_col_name, '_prev_next_reach_pos']) = cell(size(prev_fix_end_idx));	% relative position of the next fixation...
 
 			% now get the fixation following the prev fixation to
 			% determine the miovement
@@ -88,7 +94,7 @@ if ~isempty(fixations_struct)
 			triallog_table.([out_cur_fix_source_name, '_', cur_tick_idx_col_name, '_cur_fix_end_s']) = tmp_tick_timestamp_list(mod_cur_fix_end_idx);
 			triallog_table.([out_cur_fix_source_name, '_', cur_tick_idx_col_name, '_cur_fix_end_tick_idx']) = cur_fix_end_idx;
 			triallog_table.([out_cur_fix_source_name, '_', cur_tick_idx_col_name, '_cur_fix_mean_XY']) = cur_fix_mean_XY;
-			triallog_table.([out_cur_fix_source_name, '_', cur_tick_idx_col_name, '_cur_next_reach_pos']) = cell(size(cur_fix_end_idx));	% relative position of the next fixation...
+			%triallog_table.([out_cur_fix_source_name, '_', cur_tick_idx_col_name, '_cur_next_reach_pos']) = cell(size(cur_fix_end_idx));	% relative position of the next fixation...
 
 
 			% extract the relative position information of a reach
