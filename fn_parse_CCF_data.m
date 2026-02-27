@@ -2,12 +2,19 @@ function [ triallog_table, record_struct, record2D_struct, AI_samples_struct, DI
 %FN_PARSE_CCF_DATA Summary of this function goes here
 %   Detailed explanation goes here
 %
-% TODO implement looping over a base folder and pick the runfolders
-% automatically
+% TODO 
+%	merge runs of a session, this likely requires special casing for
+%	targets (if different runs use different sets of target), spcial-casing
+%	collection and trial numbers, as well as modifying TDT data (re merging .SEV, datafilt, datafilt2, and dataspikes files according to the CCF timestamps)
+%
+% DONE:
+%	implement looping over a base folder and pick the runfolders
+%	automatically, changed by moving to better named "run folders"
+%	merging of the individual runs per session still desired
+%
 %	create a per collection table that lists relevant events per collection
 %	(aka "trial") for visual events as well as touch events and reward
 %	events...
-
 
 
 
@@ -69,6 +76,9 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260204', '20260204T112256.A_Elmo.B_JL.SCP_01.sessiondir') ...		
 		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260204', '20260204T115759.A_Elmo.B_JL.SCP_01.sessiondir') ...
 		};
+	% test file for merged session parsing...
+	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251219', '20251219TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir')};
+
 	%cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '000_000', '19');
 
 	% use a file picker to select the desired folder
@@ -95,24 +105,38 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	% find additional information per cycle
 	addition_triallog_per_cycle_info_filename_list = {'movement_to_target.csv'};
 	additional_triallog_column_table = [];
+	cur_additional_per_cycle_info_FQN_list = {};
 	for i_additinal_per_cycle_info_FQN = 1 : length(addition_triallog_per_cycle_info_filename_list)
-		cur_additinal_per_cycle_info_FQN = fullfile(cur_CCF_runfolder_FQN, addition_triallog_per_cycle_info_filename_list{i_additinal_per_cycle_info_FQN});
-		if isfile(cur_additinal_per_cycle_info_FQN)
-			[cur_dir, cur_name, cur_ext] = fileparts(cur_additinal_per_cycle_info_FQN);
+		cur_additional_per_cycle_info_FQN = fullfile(cur_CCF_runfolder_FQN, addition_triallog_per_cycle_info_filename_list{i_additinal_per_cycle_info_FQN});
+		cur_additional_per_cycle_info_FQN_list(end+1) = {cur_additional_per_cycle_info_FQN};
+		if isfile(cur_additional_per_cycle_info_FQN)
+			[cur_dir, cur_name, cur_ext] = fileparts(cur_additional_per_cycle_info_FQN);
 			switch cur_ext
 				case {'.csv'}
-					cur_additional_triallog_column_table = readtable(cur_additinal_per_cycle_info_FQN);
+					cur_additional_triallog_column_table = readtable(cur_additional_per_cycle_info_FQN);
 				otherwise
 					error([mfilename, ': unhandled extension: ', cur_ext]);
 			end
+
+			switch addition_triallog_per_cycle_info_filename_list{i_additinal_per_cycle_info_FQN}
+				case 'movement_to_target.csv'
+					% rename columns
+					existing_names = cur_additional_triallog_column_table.Properties.VariableNames;
+					changed_names = regexprep(existing_names, '^p0_', 'A_');
+					changed_names = regexprep(changed_names, '^p1_', 'B_');
+					changed_names = regexprep(changed_names, '_frame$', '_tick_idx');
+					cur_additional_triallog_column_table = renamevars(cur_additional_triallog_column_table, existing_names, changed_names);
+
+			end
+
 			if isempty(additional_triallog_column_table)
 				additional_triallog_column_table = cur_additional_triallog_column_table;
 			else
 				additional_triallog_column_table = [additional_triallog_column_table, cur_additional_triallog_column_table];	% UNTESTED
 			end
-			disp([mfilename, ': INFO: added additional per cycle information from: ', cur_additinal_per_cycle_info_FQN]);
+			disp([mfilename, ': INFO: added additional per cycle information from: ', cur_additional_per_cycle_info_FQN]);
 		else
-			disp([mfilename, ': did not find data file with additional per_cycle information: ', cur_additinal_per_cycle_info_FQN]);
+			disp([mfilename, ': did not find data file with additional per_cycle information: ', cur_additional_per_cycle_info_FQN]);
 		end
 	end
 
@@ -258,12 +282,14 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		request_list = {'nan_out_invalid_aims_pos', 'nan_out_invalid_agent_pos', ...
 		'calc_and_store_distances_to_targets', ...
 		'add_per_target_changed_pos_col', ...
-		'detect_agent_fixations', 'detect_aim_fixations', ...	% needs fixing
+		...'detect_agent_fixations', 'detect_aim_fixations', ...	% needs fixing
 		};
 
 		max_dispersion_threshold = json_struct.conf.target_radius/2; % potentially define this in millimeter?
 		min_fixation_duration_threshold_ms = 100; 
+		tic
 		[record2D_table, fixations_struct] = fn_amend_record2D_table(record2D_table, json_struct.conf, request_list, max_dispersion_threshold, min_fixation_duration_threshold_ms);
+		toc
 
 		% the number of targets in a run is not fixed, so detect it...
 		record2D_colname_list = record2D_table.Properties.VariableNames;
@@ -311,7 +337,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		% DI_samples
 		[DI_samples_timestamp_list, DI_samples_struct, DI_timing_fh] = fn_estimate_per_sample_timestamps_for_h5table('DI_samples', h5_struct, json_struct);
 		fn_save_figure(DI_timing_fh, cur_CCF_runfolder_FQN, 'DI_sampling_timestamp_control_plot.pdf');
-		% convert the bit lines into individual columns in a ddition to the
+		% convert the bit lines into individual columns in addition to the
 		% full DI word
 		DI_word = DI_samples_struct.table;
 		for i_bitline = 1 : length(DI_samples_struct.header)
@@ -397,6 +423,27 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 	% potentially add additinal per cycle columns
 	if ~isempty(additional_triallog_column_table)
+		% special casing....
+		if (any(contains(cur_additional_per_cycle_info_FQN_list, 'movement_to_target.csv')))
+			% here the _s timestamp columns are all based on experiement
+			% start and not an absolute timestamps, but we expect/need
+			% absolute timestamps, so recreate them from the matching
+			% _tick_idx columns
+			additional_table_col_names = additional_triallog_column_table.Properties.VariableNames;
+			timestamp_column_ldx = contains(additional_table_col_names, regexpPattern('_s$'));
+			timestamp_column_idx = find(timestamp_column_ldx);
+			for i_proto_ts_col = 1 : length(timestamp_column_idx)
+				cur_col_timestamp_name = additional_table_col_names{timestamp_column_idx(i_proto_ts_col)};
+				cur_col_tick_idx_name = regexprep(cur_col_timestamp_name, '_s$', '_tick_idx');
+				if ismember({cur_col_tick_idx_name}, additional_table_col_names) %&& additional_triallog_column_table.(cur_col_timestamp_name)(1) < record2D_table.timestamp(1)
+					cur_nan_ldx = isnan(additional_triallog_column_table.(cur_col_tick_idx_name));
+					additional_triallog_column_table.(cur_col_timestamp_name)(cur_nan_ldx) = NaN;
+					additional_triallog_column_table.(cur_col_timestamp_name)(~cur_nan_ldx) = record2D_table.timestamp(additional_triallog_column_table.(cur_col_tick_idx_name)(~cur_nan_ldx));
+
+				end
+			end
+		end
+
 		existing_table_col_names = triallog_table.Properties.VariableNames;
 		additional_table_col_names = additional_triallog_column_table.Properties.VariableNames;
 		if any(ismember(existing_table_col_names, additional_table_col_names))
@@ -410,7 +457,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		else
 			% now we need to match rows via known matching columns
 			if ismember({'trial_num'}, existing_table_col_names) && ismember({'cycle'}, additional_table_col_names)
-				existing_match_column_name = 'trial_num';
+				existing_match_column_name = 'trial_num';	% special case trial_num equals row_idx in triallog_table so no additional search necessary
 				additional_match_column_name = 'cycle';
 				for i_additional_column = 1 : length(additional_table_col_names)
 					cur_additonal_column_name = additional_table_col_names{i_additional_column};
@@ -418,8 +465,13 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 					% now loop over all cycles
 					for i_additional_row_idx = 1 : n_additional_rows
 						cur_additional_row_idx = additional_triallog_column_table.(additional_match_column_name)(i_additional_row_idx);
+						%cur_existing_row_idx = cur_additional_row_idx;
+						% her we would need something like, if trail_num
+						% would not already be the row_idx for
+						% triallog_table
+						cur_existing_row_idx = find(ismember(triallog_table.(existing_match_column_name), cur_additional_row_idx));	% this is generic but costly....
 						%if ~iscell(additional_triallog_column_table.(cur_additonal_column_name)(cur_additional_row_idx))
-							triallog_table.(cur_additonal_column_name)(cur_additional_row_idx) = additional_triallog_column_table.(cur_additonal_column_name)(cur_additional_row_idx);
+							triallog_table.(cur_additonal_column_name)(cur_existing_row_idx) = additional_triallog_column_table.(cur_additonal_column_name)(cur_additional_row_idx);
 						%else
 						%	disp('Doh...');
 						%	triallog_table.(cur_additonal_column_name)(cur_additional_row_idx+1) = additional_triallog_column_table.(cur_additonal_column_name)(cur_additional_row_idx);
@@ -431,8 +483,21 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			end
 
 		end
-
 	end
+
+	% now check the triallog table for sanity
+	existing_table_col_names = triallog_table.Properties.VariableNames;
+	for i_triallog_col = 1 : length(existing_table_col_names)
+		cur_col_data = triallog_table.(existing_table_col_names{i_triallog_col});
+		if iscell(cur_col_data(1))
+			isempty_ldx = cellfun(@isempty,cur_col_data);
+			cur_col_data(isempty_ldx) = {'None'};
+			nan_string_ldx = contains(cur_col_data, regexpPattern('^NaN$'));
+			cur_col_data(nan_string_ldx) = {'None'};
+		end
+		triallog_table.(existing_table_col_names{i_triallog_col}) = cur_col_data;
+	end
+
 
 
 	% now calculate the distances between the entities and add to table or
