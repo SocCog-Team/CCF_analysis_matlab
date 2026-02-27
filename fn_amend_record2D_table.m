@@ -13,6 +13,8 @@ debug = 0;
 fixations_struct = [];
 
 
+timestamps.(mfilename).start = tic;
+
 
 % what to do here?
 if ~exist('request_list', 'var') || isempty(request_list)
@@ -108,6 +110,7 @@ end
 agent0_is_touching_ldx = record2D_table.agent0_is_touching == 1;
 agent1_is_touching_ldx = record2D_table.agent1_is_touching == 1;
 if ismember({'nan_out_invalid_aims_pos'}, request_list)
+	disp([mfilename, ': INFO: Processing requested nan_out_invalid_aims_pos']);
 	% use nan as marker for invalid positions?
 	record2D_table.aims0_X(~agent0_is_touching_ldx) = nan;
 	record2D_table.aims0_Y(~agent0_is_touching_ldx) = nan;
@@ -115,6 +118,7 @@ if ismember({'nan_out_invalid_aims_pos'}, request_list)
 	record2D_table.aims1_Y(~agent1_is_touching_ldx) = nan;
 end
 if ismember({'nan_out_invalid_agent_pos'}, request_list)
+	disp([mfilename, ': INFO: Processing requested nan_out_invalid_agent_pos']);
 	% use nan as marker for invalid positions?
 	record2D_table.agent0_X(~agent0_is_touching_ldx) = nan;
 	record2D_table.agent0_Y(~agent0_is_touching_ldx) = nan;
@@ -133,6 +137,8 @@ else
 end
 
 if ~isempty(target_radius) && ismember({'calc_and_store_distances_to_targets'}, request_list)
+	disp([mfilename, ': INFO: Processing requested calc_and_store_distances_to_targets']);
+
 	%timestamps.(mfilename).start_on_target = tic;
 	for i_target_IDX = 1 : length(target_prefix_list)
 		%disp(['Processing ', target_prefix_list{i_target_IDX}]);
@@ -158,6 +164,7 @@ end
 
 
 if ismember({'add_per_target_changed_pos_col'}, request_list)
+	disp([mfilename, ': INFO: Processing requested add_per_target_changed_pos_col']);
 	% we need this unconditionally
 	for i_target_IDX = 1 : length(target_prefix_list)
 		cur_targetIDX = str2double(regexprep(target_prefix_list{i_target_IDX}, 'target', ''));
@@ -179,6 +186,8 @@ end
 % now run the fixation detector
 if ismember({'detect_aim_fixations'}, request_list)
 	for i_aim = 1 : length(aim_prefix_list)
+		timestamps.(mfilename).detect_aim_fixations.(aim_prefix_list{i_aim}).start = tic;
+		disp([mfilename, ': INFO: Processing requested detect_aim_fixations: ', aim_prefix_list{i_aim}]);
 		cur_aim = aim_prefix_list{i_aim};
 		cur_data_struct_of_arr.timestamp = record2D_table.timestamp * 1000;	% we want milliseconds
 		cur_data_struct_of_arr.X = record2D_table.([cur_aim, '_X']);
@@ -198,11 +207,16 @@ if ismember({'detect_aim_fixations'}, request_list)
 			axis equal
 			axis square
 		end
+		timestamps.(mfilename).detect_aim_fixations.(aim_prefix_list{i_aim}).end = toc;
+		duration_s = timestamps.(mfilename).detect_aim_fixations.(aim_prefix_list{i_aim}).end - timestamps.(mfilename).detect_aim_fixations.(aim_prefix_list{i_aim}).start;
+		disp(['detect_aim_fixations (', aim_prefix_list{i_aim}, ') took: ', num2str(duration_s), ' seconds.']);
 	end
 end
 
 if ismember({'detect_agent_fixations'}, request_list)
 	for i_agent = 1 : length(agent_prefix_list)
+		disp([mfilename, ': INFO: Processing requested detect_agent_fixations: ', agent_prefix_list{i_agent}]);
+		timestamps.(mfilename).detect_agent_fixations.(agent_prefix_list{i_aim}).start = tic;
 		cur_agent = agent_prefix_list{i_agent};
 		cur_data_struct_of_arr.timestamp = record2D_table.timestamp * 1000;	% we want milliseconds
 		cur_data_struct_of_arr.X = record2D_table.([cur_agent, '_X']);
@@ -222,9 +236,16 @@ if ismember({'detect_agent_fixations'}, request_list)
 			axis equal
 			axis square
 		end
+		timestamps.(mfilename).detect_agent_fixations.(agent_prefix_list{i_aim}).end = toc;
+		duration_s = timestamps.(mfilename).detect_agent_fixations.(agent_prefix_list{i_aim}).end - timestamps.(mfilename).detect_agent_fixations.(agent_prefix_list{i_aim}).start;
+		disp(['detect_agent_fixations (', agent_prefix_list{i_aim}, ') took: ', num2str(duration_s), ' seconds.']);
 	end
 end
 
+
+timestamps.(mfilename).end = toc(timestamps.(mfilename).start);
+disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end), ' seconds.']);
+disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end / 60), ' minutes.']);
 
 
 end
