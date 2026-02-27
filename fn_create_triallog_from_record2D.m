@@ -127,7 +127,17 @@ for i_target_IDX = 1 : length(target_prefix_list)
 		cur_target_state_change_struct.target_name = target_prefix_list{i_target_IDX};
 		% we do have targets that can change the id every other trial so
 		% collect the curent id for each state transition
-		cur_target_id = record2D_table.(['target', num2str(cur_targetIDX), '_id'])(cur_change_row_idx);
+		
+		% for merged sessions target_id can contain NaNs
+		unique_cur_target_id = unique(record2D_table.(['target', num2str(cur_targetIDX), '_id']));
+		valid_unique_cur_taget_id = unique_cur_target_id(~isnan(unique_cur_target_id));
+		if length(valid_unique_cur_taget_id) ~= 1
+			disp([mfilename, ': WARN: no valid target_id found for target', num2str(cur_targetIDX), ' found.']);
+			continue
+		else
+			cur_target_id = valid_unique_cur_taget_id(1);
+		end
+		%cur_target_id = record2D_table.(['target', num2str(cur_targetIDX), '_id'])(cur_change_row_idx);
 		target_id_name_cell = enum_struct.target_id.name_list(find(enum_struct.target_id.value_list == cur_target_id));
 		cur_target_state_change_struct.target_id = cur_target_id;
 		cur_target_state_change_struct.target_id_name = target_id_name_cell{1};
