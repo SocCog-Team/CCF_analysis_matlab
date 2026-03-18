@@ -18,5 +18,8 @@ end
 % do not try to find nan timestamps...
 cur_closests_tick_idx_list(isnan(timestamp_list)) = nan;
 
+% consider sanitizing timesatamps out of range of the reference list, or
+% better allow a max_abs_dist parameter
+
 end
 

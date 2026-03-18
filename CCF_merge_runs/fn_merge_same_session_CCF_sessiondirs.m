@@ -115,6 +115,7 @@ disp([mfilename, ': collection offsets: ', num2str(collection_offset_list)]);
 % =====================================================================
 merged_record2D_header = {};
 merged_record2D_data_cell = cell(1, n_runs);
+cumulative_score_col_name_list = {'agent0_cumulative_score', 'agent1_cumulative_score'};
 
 for i_run = 1 : n_runs
 	cur_header = raw_data_list{i_run}.json_struct.record2D_header.record2D_column_names';
@@ -133,9 +134,22 @@ for i_run = 1 : n_runs
 	nfc_col = find(ismember(cur_header, {'n_finished_collections'}));
 	cur_data(:, nfc_col) = cur_data(:, nfc_col) + collection_offset_list(i_run);
 
+	% Carry over cumulative scores so they keep increasing across runs
+	for i_cs = 1 : length(cumulative_score_col_name_list)
+		cs_col = find(ismember(cur_header, cumulative_score_col_name_list(i_cs)));
+		if ~isempty(cs_col) && i_run > 1
+			prev_data = merged_record2D_data_cell{i_run-1};
+			prev_cs_col = find(ismember(merged_record2D_header, cumulative_score_col_name_list(i_cs)));
+			if ~isempty(prev_cs_col)
+				prev_final_score = prev_data(end, prev_cs_col);
+				cur_data(:, cs_col) = cur_data(:, cs_col) + prev_final_score;
+			end
+		end
+	end
+
 	% Add run_idx metadata column
 	cur_header{end+1} = 'run_idx';
-	cur_data(:, end+1) = i_run - 1;
+	cur_data(:, end+1) = i_run - 1;	% python style 0-based index
 
 	merged_record2D_data_cell{i_run} = cur_data;
 
@@ -149,6 +163,26 @@ for i_run = 1 : n_runs
 end
 
 merged_record2D_data = vertcat(merged_record2D_data_cell{:});
+
+% Forward-fill spurious zeros in cumulative_score columns: any zero that
+% follows a non-zero value is replaced with the last non-zero value.
+% Leading zeros (before the first reward) are kept.
+for i_cs = 1 : length(cumulative_score_col_name_list)
+	cs_col = find(ismember(merged_record2D_header, cumulative_score_col_name_list(i_cs)));
+	if ~isempty(cs_col)
+		cs_values = merged_record2D_data(:, cs_col);
+		last_valid = 0;
+		for i_row = 1 : length(cs_values)
+			if cs_values(i_row) ~= 0
+				last_valid = cs_values(i_row);
+			elseif last_valid ~= 0
+				cs_values(i_row) = last_valid;
+			end
+		end
+		merged_record2D_data(:, cs_col) = cs_values;
+	end
+end
+
 disp([mfilename, ': merged record2D: ', num2str(size(merged_record2D_data, 1)), ' rows x ', ...
 	num2str(size(merged_record2D_data, 2)), ' cols.']);
 

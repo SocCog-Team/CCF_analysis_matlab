@@ -18,6 +18,28 @@ function [ triallog_table, record_struct, record2D_struct, AI_samples_struct, DI
 
 
 
+% if we run this directly for testing we want/need this to be in the
+% path...
+if ~exist('cur_CCF_runfolder_FQN_list', 'var')
+	CCF_analysis_path = fullfile('C:', 'SCP_CODE', 'CCF_analysis_matlab');
+	% delete existing paths containing the calling directory
+	% this is a work around for matlab's inability to detect changed files on
+	% most network shares
+	if ~isempty(strfind(path, [CCF_analysis_path, pathsep]))
+		path_string = path;
+		disp('Current directory already in the path; deleting all subdirectories from the path to work around network share issues...');
+		% turn the path into cell array
+		while length(path_string) > 0
+			[cur_path_item, remain] = strtok(path_string, ';:');
+			path_string = remain(2:end);
+			if ~isempty(strfind(cur_path_item, CCF_analysis_path))
+				rmpath(cur_path_item);
+			end
+		end
+	end
+	% now add them again
+	addpath(genpath(CCF_analysis_path));
+end
 
 
 data_struct_list = struct();
@@ -78,6 +100,11 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 		};
 	% test file for merged session parsing...
 	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251219', '20251219TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir')};
+
+	% test 9-dot-calibration (with new jasonl format where the type is indicative of different record types that should be steered into individual subtables)
+	%Y:\SCP_DATA\SCP-CTRL-01\CCF\foraging_task_2_NHP\SESSIONLOGS\2026\260316\20260316T132749.A_BA.B_NONE.SCP_01.sessiondir
+	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260316', '20260316T132749.A_BA.B_NONE.SCP_01.sessiondir')};
+
 
 	%cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '000_000', '19');
 
@@ -144,6 +171,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	% the json files
 	for i_json_FQN = 1 : length(json_dir_struct)
 		cur_json_name = json_dir_struct(i_json_FQN).name;
+		cur_json_name_sanitized = fn_sanitize_string_as_matlab_variable_name(cur_json_name);
 		if (debug)
 			disp(['Processing: ', cur_json_name]);
 		end
@@ -152,15 +180,17 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		% this will likely fail for complex or (too) large json files...
 		tmp_string_data = fileread(cur_json_FQN);
 		if ~isempty(tmp_string_data)
-			json_struct.(cur_json_name) = jsondecode(tmp_string_data);
+			json_struct.(cur_json_name_sanitized) = jsondecode(tmp_string_data);
 		else
 			disp([cur_json_name, ' contained no data, skipping...']);
 		end
 	end
 
-	% the json files
+	% the jsonl files
 	for i_jsonl_FQN = 1 : length(jsonl_dir_struct)
-		cur_jsonl_name = json_dir_struct(i_jsonl_FQN).name;
+		cur_jsonl_name = jsonl_dir_struct(i_jsonl_FQN).name;
+		cur_jsonl_name_sanitized = fn_sanitize_string_as_matlab_variable_name(cur_jsonl_name);
+
 		if (debug)
 			disp(['Processing: ', cur_jsonl_name]);
 		end
@@ -170,10 +200,24 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		tmp_string_data = fileread(cur_jsonl_FQN);
 		if ~isempty(tmp_string_data)
 			%parsed_jsonl = fn_parse_jsonl_file(cur_jsonl_FQN);
-			jsonl_struct.(cur_jsonl_name) = fn_parse_jsonl_file(cur_jsonl_FQN);
+			jsonl_struct.(cur_jsonl_name_sanitized) = fn_parse_jsonl_file(cur_jsonl_FQN);
+			%
+
 		else
 			disp([cur_jsonl_name, ' contained no data, skipping...']);
 		end
+	end
+
+	% try to detect a 9-dot-calibration session, so we can start the
+	% calibration routine (but only do so if a calibration does not exist already in the parent directory... (the session day directory))
+	if isfield(jsonl_struct, 'manual_calibration_state_dot_jsonl') && isfield(jsonl_struct, 'pupillabs_data_dot_jsonl')
+
+		% TODO only run this if no registration exists in the parent
+		% directory... (this is interactive but only needs to be run once)
+		reg_struct = fn_gaze_recalibrator_v02_CCF(cur_CCF_runfolder_FQN, jsonl_struct.pupillabs_data_dot_jsonl, jsonl_struct.manual_calibration_state_dot_jsonl, ...
+			fullfile(cur_CCF_runfolder_FQN, 'pupillabs_data.jsonl'), json_struct.conf_dot_json, 'pupillabs');
+
+
 	end
 
 
@@ -320,8 +364,17 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			target_radius = [];
 		end
 		[triallog_table, record2D_table, sorted_target_state_transition_table] = fn_create_triallog_from_record2D(record2D_table, enum_struct, target_radius);
-		% We need this later...
-		[first2second_time_conversion_struct, second2first_time_conversion_struct, time_conversion_struct] = fn_create_timing_conversion_struct('CCF_timestamps', triallog_table.collection_start_s, 'CCF_ticks', triallog_table.collection_start_tick_idx);
+		% We need this later... NOTE: will not work well for merged
+		% sessions, as the tick timing changes for each run, and with a
+		% 1/120 second (~8ms) granularity, which is bad...
+		%[first2second_time_conversion_struct, second2first_time_conversion_struct, time_conversion_struct] = fn_create_timing_conversion_struct('CCF_timestamps', triallog_table.collection_start_s, 'CCF_ticks', triallog_table.collection_start_tick_idx);
+
+		if ismember({'src_run_idx'}, triallog_table.Properties.VariableNames) && isfield(json_struct, 'merge_manifest') && isfield(json_struct.merge_manifest, 'source_sessions') && isfield(json_struct.merge_manifest.source_sessions, 'session_id')
+			unassigned_src_run_idx = find(triallog_table.src_run_idx == 0);
+			triallog_table.src_run_idx(unassigned_src_run_idx) = triallog_table.src_run_idx(unassigned_src_run_idx - 1);	% since we have unassigned src_run_idx at the end of a run, just force these to refer to the correct session
+			merged_session_id_list = {json_struct.merge_manifest.source_sessions.session_id}';
+			triallog_table.src_session_id = merged_session_id_list(triallog_table.src_run_idx);
+		end
 	end
 
 	% add the reward information per collection
@@ -373,8 +426,12 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		% numbers
 		triallog_table = addvars(triallog_table, nan(size(triallog_table.collection_start_s)), nan(size(triallog_table.collection_start_s)), 'NewVariableNames', {'PDD_onset_s', 'PDD_offset_s'});
 		triallog_table.PDD_onset_s(onset_offset_events_struct.pd_block_onset_collection_num_list + 1) = onset_offset_events_struct.pd_block_onset_s_list;
-		triallog_table.PDD_onset_tick_idx = fn_convert_time_between_named_timebases(triallog_table.PDD_onset_s, time_conversion_struct, 'CCF_timestamps', 'CCF_ticks');
-		triallog_table.PDD_onset_tick_idx = round(triallog_table.PDD_onset_tick_idx);
+		% for merged sessions search for the record2D_table row with the
+		% closest timestamp and take that row"s tick_idx
+
+		%triallog_table.PDD_onset_tick_idx = fn_convert_time_between_named_timebases(triallog_table.PDD_onset_s, time_conversion_struct, 'CCF_timestamps', 'CCF_ticks');	% NEEDS FIXING FOR MERGED_SESSIONS
+		%triallog_table.PDD_onset_tick_idx = round(triallog_table.PDD_onset_tick_idx);
+		triallog_table.PDD_onset_tick_idx = fn_find_closest_tick_idx_for_timestamp_list(record2D_table.timestamp, triallog_table.PDD_onset_s);
 
 		% the times when CCF thought the stiumuls changed.. that is the tick_idx when the backend/target repositioned itself.
 		%	 fromn then it takes time to percolate to the ui/target state
@@ -399,9 +456,9 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		% so we account that for the pd_block_onset_collection_num_list as
 		% otherwise in each collection the offset preceds the onset (which is technically correct, but undesired here for the per collection table)
 		triallog_table.PDD_offset_s(onset_offset_events_struct.pd_block_onset_collection_num_list + 1) = onset_offset_events_struct.pd_block_offset_s_list;
-		triallog_table.PDD_offset_tick_idx = fn_convert_time_between_named_timebases(triallog_table.PDD_offset_s, time_conversion_struct, 'CCF_timestamps', 'CCF_ticks');
-		triallog_table.PDD_offset_tick_idx = round(triallog_table.PDD_offset_tick_idx);
-
+		%triallog_table.PDD_offset_tick_idx = fn_convert_time_between_named_timebases(triallog_table.PDD_offset_s, time_conversion_struct, 'CCF_timestamps', 'CCF_ticks');
+		%triallog_table.PDD_offset_tick_idx = round(triallog_table.PDD_offset_tick_idx);
+		triallog_table.PDD_offset_tick_idx = fn_find_closest_tick_idx_for_timestamp_list(record2D_table.timestamp, triallog_table.PDD_offset_s);
 	end
 
 
@@ -461,6 +518,23 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 				additional_match_column_name = 'cycle';
 				for i_additional_column = 1 : length(additional_table_col_names)
 					cur_additonal_column_name = additional_table_col_names{i_additional_column};
+					cur_additonal_column_class = class(additional_triallog_column_table.(cur_additonal_column_name)(1));
+
+					example_value = additional_triallog_column_table.(cur_additonal_column_name)(1);
+
+					if isnumeric(example_value)
+						triallog_table.(cur_additonal_column_name) = nan(size(triallog_table.collection_num));
+					elseif iscell(example_value)
+						triallog_table.(cur_additonal_column_name) = cell(size(triallog_table.col_targ_id_name));
+						% are empty values marked as NaN strungs?
+						if ismember({'NaN'}, additional_triallog_column_table.(cur_additonal_column_name))
+							% potentially set all these to 'NaN'...
+						end
+					else
+						disp('Doh...');
+						keyboard
+					end
+
 					%cur_additional_data = additional_triallog_column_table.(cur_additonal_column_name);
 					% now loop over all cycles
 					for i_additional_row_idx = 1 : n_additional_rows
@@ -471,7 +545,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 						% triallog_table
 						cur_existing_row_idx = find(ismember(triallog_table.(existing_match_column_name), cur_additional_row_idx));	% this is generic but costly....
 						%if ~iscell(additional_triallog_column_table.(cur_additonal_column_name)(cur_additional_row_idx))
-							triallog_table.(cur_additonal_column_name)(cur_existing_row_idx) = additional_triallog_column_table.(cur_additonal_column_name)(cur_additional_row_idx);
+							triallog_table.(cur_additonal_column_name)(cur_existing_row_idx) = additional_triallog_column_table.(cur_additonal_column_name)(i_additional_row_idx);
 						%else
 						%	disp('Doh...');
 						%	triallog_table.(cur_additonal_column_name)(cur_additional_row_idx+1) = additional_triallog_column_table.(cur_additonal_column_name)(cur_additional_row_idx);
@@ -575,7 +649,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 end
 
-% let' export the most coimplete record2D we generated
+% let' export the most complete record2D we generated
 record2D_struct = record2D_table;
 
 

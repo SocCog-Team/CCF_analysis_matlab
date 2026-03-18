@@ -68,7 +68,10 @@ for i_col = 1 : length(record2D_colname_list)
 end
 target_prefix_list = unique(target_prefix_list);
 
-
+merged_session = false;
+if ismember({'run_idx'}, record2D_table.Properties.VariableNames)
+	merged_session = true;
+end
 
 start_ts = record2D_table.timestamp(1);
 
@@ -109,17 +112,19 @@ triallog_table = addvars(triallog_table, [first_instance_of_collection_num_idx(2
 
 % this arguably should come from a jsonl file, but since we stored the
 % states in record2D we can estimate the state transition times
-% collect the target state transitions and colect indices and timestamps
+% collect the target state transitions and collect indices and timestamps
 target_state_change_struct = [];
 for i_target_IDX = 1 : length(target_prefix_list)
-	disp(['Processing ', target_prefix_list{i_target_IDX}]);
+	disp(['Processing target state transitions for ', target_prefix_list{i_target_IDX}]);
 	cur_targetIDX = str2double(regexprep(target_prefix_list{i_target_IDX}, 'target', ''));
 	cur_col_name = [target_prefix_list{i_target_IDX}, '_target_state'];
 	cur_data_col = record2D_table.(cur_col_name);
 	% mark the record2D row indices where a change in state was manifest
 	diffed_cur_data_col = [0; diff(cur_data_col)];
 	% now loop over all changes here...
-	cur_target_state_change_idx = find(diffed_cur_data_col ~= 0);	% can be positive and negative... as long as it is not 0
+	cur_target_state_change_idx = find(diffed_cur_data_col ~= 0 & ~isnan(diffed_cur_data_col));	% can be positive and negative... as long as it is not 0 and not NaN (for merged sessions)
+	% also exclude NaNs
+
 	for i_target_state_change_idx = 1 : length(cur_target_state_change_idx)
 		cur_change_row_idx = cur_target_state_change_idx(i_target_state_change_idx);
 
@@ -244,6 +249,7 @@ if isempty(MATCH_cur_target_IDX_idx) || force_collecting_by_processing
 	% we need to synthesize the targetN_collecting_by_agentM columns in
 	% record2D
 	for i_target_IDX = 1 : length(target_prefix_list)
+		disp(['Processing target collection state of aims/agents for ', target_prefix_list{i_target_IDX}]);
 		cur_targetIDX = str2double(regexprep(target_prefix_list{i_target_IDX}, 'target', ''));
 		cur_target_prefix = target_prefix_list{i_target_IDX};
 		cur_col_name_stem = [target_prefix_list{i_target_IDX}, '_collecting_by_'];
@@ -273,18 +279,28 @@ if isempty(MATCH_cur_target_IDX_idx) || force_collecting_by_processing
 		cur_target_collecting_agent_start_ldx = ismember(cur_target_sorted_target_state_transition_table.old_state_ENUM_name, {'waiting_for_agent'}) & ismember(cur_target_sorted_target_state_transition_table.new_state_ENUM_name, {'collecting'});
 		cur_target_collecting_agent_start_idx = find(cur_target_collecting_agent_start_ldx);
 
+
+		% for this target no need to recalculate for each i_target_collecting_agent_start
+		% next find the next collection end point
+		% the next transition collecting->waiting_for_agent
+		cur_target_collecting_abort_idx = find(ismember(cur_target_sorted_target_state_transition_table.old_state_ENUM_name, {'collecting'}) & ismember(cur_target_sorted_target_state_transition_table.new_state_ENUM_name, {'waiting_for_agent'}));
+		% or pre_acquisition->waiting_for_agent
+		cur_target_collecting_successful_end_idx = find(ismember(cur_target_sorted_target_state_transition_table.old_state_ENUM_name, {'pre_acquisition'}) & ismember(cur_target_sorted_target_state_transition_table.new_state_ENUM_name, {'waiting_for_agent'}));
+		%  the last cycle in a run likely is incomplete so can/should be
+		%  ignored here that is we also end at run end
+
+		if (merged_session)
+			% ATTENTION diff reduces the number of changes by one, and will
+			% report the last tick of each run, exactly what we want here
+			run_end_tick_idx_list = find(diff(record2D_table.run_idx));
+		end
+
 		% not elegant but let's loop over these start_indices to find the
 		% matching stop indices
 		for i_target_collecting_agent_start = 1 : length(cur_target_collecting_agent_start_idx)
 			cur_cur_target_collecting_agent_start_idx = cur_target_collecting_agent_start_idx(i_target_collecting_agent_start);
 			cur_target_collecting_agent_start_tick_idx = cur_target_sorted_target_state_transition_table.tick_idx(cur_cur_target_collecting_agent_start_idx);
 
-			% for this target
-			% next find the next collection end point
-			% the next transition collecting->waiting_for_agent
-			cur_target_collecting_abort_idx = find(ismember(cur_target_sorted_target_state_transition_table.old_state_ENUM_name, {'collecting'}) & ismember(cur_target_sorted_target_state_transition_table.new_state_ENUM_name, {'waiting_for_agent'}));
-			% or pre_acquisition->waiting_for_agent
-			cur_target_collecting_successful_end_idx = find(ismember(cur_target_sorted_target_state_transition_table.old_state_ENUM_name, {'pre_acquisition'}) & ismember(cur_target_sorted_target_state_transition_table.new_state_ENUM_name, {'waiting_for_agent'}));
 
 			% for both exit points find the first occurrence in
 			% cur_target_sorted_target_state_transition_table after cur_cur_target_collecting_agent_start_idx
@@ -293,10 +309,27 @@ if isempty(MATCH_cur_target_IDX_idx) || force_collecting_by_processing
 
 			% the nearest must be the one that ended that collection
 			cur_target_collecting_agent_end_idx = min([next_cur_target_collecting_abort_idx, next_cur_target_collecting_successful_end_idx]);	
-			if (i_target_collecting_agent_start < length(cur_target_collecting_agent_start_idx)) && cur_target_collecting_agent_end_idx >= cur_target_collecting_agent_start_idx(i_target_collecting_agent_start + 1)
+
+			do_check_cur_end_before_next_start = 1;
+			if (merged_session)
+				% this is the tick_idx
+				next_cur_run_end_idx = run_end_tick_idx_list(find(run_end_tick_idx_list >= cur_cur_target_collecting_agent_start_idx, 1, 'first'));
+				% cur_target_collecting_agent_end_idx is index into
+				% cur_target_sorted_target_state_transition_table so we can not
+				% assign this here
+				do_check_cur_end_before_next_start = 0;
+				next_collcting_end_idx = min([next_cur_run_end_idx, cur_target_sorted_target_state_transition_table.tick_idx(cur_target_collecting_agent_end_idx) - 1]);
+			end
+
+			if do_check_cur_end_before_next_start && (i_target_collecting_agent_start < length(cur_target_collecting_agent_start_idx)) && cur_target_collecting_agent_end_idx >= cur_target_collecting_agent_start_idx(i_target_collecting_agent_start + 1)
 				error('The exit state transition happens after the next start transition, which should not happen...');
 			end
-			cur_target_collecting_agent_end_tick_idx = cur_target_sorted_target_state_transition_table.tick_idx(cur_target_collecting_agent_end_idx) - 1;	% note we found the state transition that ended the collection, so the real collection end happened one tick earlier
+			if (merged_session)
+				cur_target_collecting_agent_end_tick_idx = next_collcting_end_idx;
+			else
+				cur_target_collecting_agent_end_tick_idx = cur_target_sorted_target_state_transition_table.tick_idx(cur_target_collecting_agent_end_idx) - 1;	% note we found the state transition that ended the collection, so the real collection end happened one tick earlier
+			end
+
 			if isempty(cur_target_collecting_agent_end_tick_idx)
 				% can happen at the very end if a collection is never
 				% finished, pick the last existing tick_idx
@@ -473,6 +506,7 @@ end
 
 
 % this is the rewarded target (as only that will be in initiate_reward state), so we can make a few assumptions
+disp('Fill per_cycle_information table.');
 for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transition_idx)
 	% this is in the sorted_target_state_transition_table
 	cur_initiate_reward_start_transition_idx = initiate_reward_start_transition_idx(i_initiate_reward_start_transition);
@@ -483,8 +517,13 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 	% get the true index into the triallog table
 	cur_trial_num = cur_collection_num; % initiate_reward happens after the collection counter is increased, and that starts with zero
 	if ~(cur_trial_num == i_initiate_reward_start_transition)
-		disp('Should this happen? Please, investigate...');
-		keyboard
+		if ~(merged_session)
+			disp('Should this happen? Please, investigate...');
+			keyboard
+		else
+			% this is expected for merged sessions...
+			%disp('Expected for merged sessions');
+		end
 	end
 
 	cur_target_IDX = sorted_target_state_transition_table.target_IDX(cur_initiate_reward_start_transition_idx);
@@ -505,10 +544,16 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 	%_reward
 	if ~agent0_is_collecting_cur_target &&  ~agent1_is_collecting_cur_target
 		if (cur_initiate_reward_start_transition_idx == initiate_reward_start_transition_idx(end))
-			% likely fine
-			keyboard
+			% likely fine, yes, can happen if the last incomplete trial of
+			% a run ends before initiate reward but after target relocation
+			disp([mfilename, ': INFO: cur_initiate_reward_start_transition_idx equals last initiate_reward_start_transition_idx: ', num2str(cur_initiate_reward_start_transition_idx)]);
+			%keyboard
 		else
-			error('Should not happen? Please, investigate...');
+			if ~(merged_session)
+				% in merged_sessions we can have the incomplete trials at
+				% the end of each run. not only at the very end
+				error('Should not happen? Please, investigate...');
+			end
 		end
 	end
 
@@ -533,7 +578,14 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 	elseif agent1_is_collecting_cur_target
 		any_agent_is_collecting_cur_target_ldx = agent1_is_collecting_cur_target_list;
 	else
-		error('Should not happen, investigate...');
+		% can and will happen for the last cycle of each run...
+		if ~(merged_session)
+			error('Should not happen, investigate...');
+		end
+	end
+
+	if (merged_session)
+			triallog_table.src_run_idx(cur_trial_num) = record2D_table.run_idx(cur_tick_idx) + 1;	% record2D_table.run_idx is 0-based python index, but we want a matlab index here
 	end
 
 	% cur_tick_idx will be somewhere in the middle of a cosecutive run
