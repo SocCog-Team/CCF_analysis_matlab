@@ -67,6 +67,9 @@ dbstop if error
 fq_mfilename = mfilename('fullpath');
 debug = 0;
 
+redo_gaze_calibration = 0;
+
+
 % what threshold to use to detect up from down, with Mike Walsh's caltech
 % detector and the level output mac is ~3.3 Volts, while low is at 0 if the
 % gain set correctly
@@ -98,14 +101,27 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260204', '20260204T112256.A_Elmo.B_JL.SCP_01.sessiondir') ...		
 		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260204', '20260204T115759.A_Elmo.B_JL.SCP_01.sessiondir') ...
 		};
+
 	% test file for merged session parsing...
 	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251219', '20251219TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir')};
 
 	% test 9-dot-calibration (with new jasonl format where the type is indicative of different record types that should be steered into individual subtables)
 	%Y:\SCP_DATA\SCP-CTRL-01\CCF\foraging_task_2_NHP\SESSIONLOGS\2026\260316\20260316T132749.A_BA.B_NONE.SCP_01.sessiondir
 	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260316', '20260316T132749.A_BA.B_NONE.SCP_01.sessiondir')};
+	% session recorded after the 9-dot-should use the same registration
+	% file, note this has broken target_state columns, but should serve for
+	% the gaze processing... this needs fixing by running the record2D
+	% files through the state machine again...
+	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260316', '20260316T133055.A_BA.B_NONE.SCP_01.sessiondir')};
 
+	%% first Elmo pupoillabs calibration session
+	%% Y:\SCP_DATA\SCP-CTRL-01\CCF\foraging_task_2_NHP\SESSIONLOGS\2026\260319\20260319T110006.A_Elmo.B_NONE.SCP_01.sessiondir
+	%cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260319', '20260319T110006.A_Elmo.B_NONE.SCP_01.sessiondir')};
+	% first dyadic run with gaze tracking, use for gaze processing development 
+	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260319', '20260319T112338.A_Elmo.B_BA.SCP_01.sessiondir')};
 
+%	% fixed state columns, looks good
+%	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260318', '20260318T164215.A_NONE.B_NONE.SCP_01.sessiondir')};
 	%cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '000_000', '19');
 
 	% use a file picker to select the desired folder
@@ -119,12 +135,20 @@ end
 for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	cur_CCF_runfolder_FQN = cur_CCF_runfolder_FQN_list{i_runfolder};
 	disp(['Processing: ', cur_CCF_runfolder_FQN]);
+
+	if ~isfolder(cur_CCF_runfolder_FQN)
+		error([mfilename, ': ERROR: could not find/open directory: ', cur_CCF_runfolder_FQN]);
+	end
+
 	% what files do we have here
 	json_dir_struct = dir(fullfile(cur_CCF_runfolder_FQN, '*.json'));
 	h5_dir_struct = dir(fullfile(cur_CCF_runfolder_FQN, '*.h5'));
 	txt_dir_struct = dir(fullfile(cur_CCF_runfolder_FQN, '*.txt'));
 	sessionID_dir_struct = dir(fullfile(cur_CCF_runfolder_FQN, '*.sessionID'));
 	jsonl_dir_struct = dir(fullfile(cur_CCF_runfolder_FQN, '*.jsonl'));
+
+	session_id = extractBefore(sessionID_dir_struct.name, '.sessionID');
+	sessionID_struct = fn_parse_session_id(session_id);
 
 	% the python enums:
 	enum_struct = fn_extract_python_enums(fullfile(cur_CCF_runfolder_FQN, 'enums.py'));
@@ -200,24 +224,18 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		tmp_string_data = fileread(cur_jsonl_FQN);
 		if ~isempty(tmp_string_data)
 			%parsed_jsonl = fn_parse_jsonl_file(cur_jsonl_FQN);
-			jsonl_struct.(cur_jsonl_name_sanitized) = fn_parse_jsonl_file(cur_jsonl_FQN);
-			%
+			jsonl_struct.(cur_jsonl_name_sanitized) = fn_parse_jsonl_file(cur_jsonl_FQN); %TODO: save these out as parsed .mat files and simply reload these ubnless a re-parsing is requested (also pack the raw jsonl files with gzip to save some space...)
+			% fix timestamps for gaze data
+			switch cur_jsonl_name_sanitized
+				case 'pupillabs_data_dot_jsonl'
+					% fix up the timestamps for all subtables
+					request_list = {'fix_timestamps', 'apply_calibration'};
+					jsonl_struct.(cur_jsonl_name_sanitized) = fn_amend_pupillabs_data(jsonl_struct.(cur_jsonl_name_sanitized), cur_CCF_runfolder_FQN, json_struct.conf_dot_json, sessionID_struct, request_list);
+			end
 
 		else
 			disp([cur_jsonl_name, ' contained no data, skipping...']);
 		end
-	end
-
-	% try to detect a 9-dot-calibration session, so we can start the
-	% calibration routine (but only do so if a calibration does not exist already in the parent directory... (the session day directory))
-	if isfield(jsonl_struct, 'manual_calibration_state_dot_jsonl') && isfield(jsonl_struct, 'pupillabs_data_dot_jsonl')
-
-		% TODO only run this if no registration exists in the parent
-		% directory... (this is interactive but only needs to be run once)
-		reg_struct = fn_gaze_recalibrator_v02_CCF(cur_CCF_runfolder_FQN, jsonl_struct.pupillabs_data_dot_jsonl, jsonl_struct.manual_calibration_state_dot_jsonl, ...
-			fullfile(cur_CCF_runfolder_FQN, 'pupillabs_data.jsonl'), json_struct.conf_dot_json, 'pupillabs');
-
-
 	end
 
 
@@ -229,6 +247,22 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		CCF_session_dir_FQN_elements = split(strtrim(CCF_session_dir_FQN), '/');	% this is coming from Linux so forward slash
 		CCF_run = CCF_session_dir_FQN_elements{end};
 		CCF_pair = CCF_session_dir_FQN_elements{end-1};
+	end
+
+	% try to detect a 9-dot-calibration session, so we can start the
+	% calibration routine (but only do so if a calibration does not exist already in the parent directory... (the session day directory))
+	if isfield(jsonl_struct, 'manual_calibration_state_dot_jsonl') && isfield(jsonl_struct, 'pupillabs_data_dot_jsonl')
+
+		% TODO only run this if no registration exists in the parent
+		% directory... (this is interactive but only needs to be run once)
+		calibration_dirstruct = dir(fullfile(cur_CCF_runfolder_FQN, ['GAZEREGv0*.SESSIONID_', session_id, '.*.mat']));
+
+		if (redo_gaze_calibration) || isempty(calibration_dirstruct)
+			reg_struct = fn_gaze_recalibrator_v02_CCF(cur_CCF_runfolder_FQN, jsonl_struct.pupillabs_data_dot_jsonl, jsonl_struct.manual_calibration_state_dot_jsonl, ...
+				fullfile(cur_CCF_runfolder_FQN, 'pupillabs_data.jsonl'), json_struct.conf_dot_json, 'pupillabs');
+		else
+			disp([mfilename, ': INFO: gaze registration file exists, skipping interactive 9-dot-calibration procedure, set redo_gaze_calibration = 1 to force a re-run.']);
+		end
 	end
 
 
@@ -318,7 +352,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	% record2D
 	if ~isempty(h5_struct) && ismember({'record2D_data'}, fieldnames(h5_struct))
 		% create a proper header for the data and reshape to 2D table...
-		record2D_struct.header = json_struct.record2D_header.record2D_column_names';
+		record2D_struct.header = json_struct.record2D_header_dot_json.record2D_column_names';
 		record2D_struct.table = squeeze(h5_struct.record2D_data)';
 		record2D_table = array2table(record2D_struct.table, 'VariableNames', record2D_struct.header);
 
@@ -329,10 +363,10 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		...'detect_agent_fixations', 'detect_aim_fixations', ...	% needs fixing
 		};
 
-		max_dispersion_threshold = json_struct.conf.target_radius/2; % potentially define this in millimeter?
+		max_dispersion_threshold = json_struct.conf_dot_json.target_radius/2; % potentially define this in millimeter?
 		min_fixation_duration_threshold_ms = 100; 
 		tic
-		[record2D_table, fixations_struct] = fn_amend_record2D_table(record2D_table, json_struct.conf, request_list, max_dispersion_threshold, min_fixation_duration_threshold_ms);
+		[record2D_table, fixations_struct] = fn_amend_record2D_table(record2D_table, json_struct.conf_dot_json, request_list, max_dispersion_threshold, min_fixation_duration_threshold_ms);
 		toc
 
 		% the number of targets in a run is not fixed, so detect it...
@@ -358,8 +392,8 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	
 	% process record2D to create a triallog table (as matlab table)
 	if ~isempty(record2D_struct)
-		if isfield(json_struct, 'conf')
-			target_radius = json_struct.conf.target_radius;
+		if isfield(json_struct, 'conf_dot_json')
+			target_radius = json_struct.conf_dot_json.target_radius;
 		else
 			target_radius = [];
 		end
