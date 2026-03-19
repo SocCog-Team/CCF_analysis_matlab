@@ -26,6 +26,10 @@ function [ registration_struct, version_string, version ] = fn_gaze_recalibrator
 %
 %	add the data column names to the registration structs...
 
+% 2026 CCF:
+%	clean up by removing eyelink
+%	is mouse inversion still needed, if not remove..
+
 
 tictoc_timestamp_list.(mfilename).start = tic;
 disp(['Starting: ', mfilename]);
