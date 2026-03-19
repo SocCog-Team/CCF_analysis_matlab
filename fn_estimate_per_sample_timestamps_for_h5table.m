@@ -12,7 +12,7 @@ debug = true;
 
 if ~isempty(h5_struct) && ismember({[cur_base_name, '_data']}, fieldnames(h5_struct))
 	% create a proper header for the data and reshape to 2D table...
-	data_struct.header = json_struct.([cur_base_name, '_header'])';
+	data_struct.header = json_struct.([cur_base_name, '_header_dot_json'])';
 	data_struct.table = squeeze(h5_struct.([cur_base_name, '_data']))';
 	if ~isempty(h5_struct) && ismember({[cur_base_name, '_idx_ts_data']}, fieldnames(h5_struct))
 		% construct a python timestamp list
