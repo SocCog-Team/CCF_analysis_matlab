@@ -30,8 +30,12 @@ for i_set = 1 : length(set_Side_list)
 	end
 	cur_calibration_dirstruct = dir(fullfile(cur_CCF_runfolder_FQN, '..', ['GAZEREGv0*.SESSIONID_', sessionID_struct.YYYYMMDD_string, '*.', combined_subject_string, '.SIDEID_', cur_side, '.*.mat']));
 
-
-	cur_reg_struct = load(fullfile(cur_calibration_dirstruct(1).folder, cur_calibration_dirstruct(1).name));
+	if ~isempty(cur_calibration_dirstruct)
+		cur_reg_struct = load(fullfile(cur_calibration_dirstruct(1).folder, cur_calibration_dirstruct(1).name));
+	else
+		cur_reg_struct = [];
+		disp([mfilename, ': INFO: could not find a compatible gaze regfistration file: ', ['GAZEREGv0*.SESSIONID_', sessionID_struct.YYYYMMDD_string, '*.', combined_subject_string, '.SIDEID_', cur_side, '.*.mat']]);
+	end
 
 	% now loop over the subtables for the current side
 	for i_subtable = 1 :length(cur_set_idx)
@@ -49,11 +53,10 @@ for i_set = 1 : length(set_Side_list)
 			cur_data_table.(col_header) = corrected_local_timestamp_list;
 		end
 
-		if ismember({'apply_calibration'}, request_list)
+		if ismember({'apply_calibration'}, request_list) && ~isempty(cur_reg_struct)
 			disp([mfilename, ': INFO: applying gaze corrections']);
 			cur_subtable_reg_tform = cur_reg_struct.out_registration_struct.(cur_subtable_name).registration_struct.(registration_type).(cur_subtable_name).tform;
 			cur_data_table.registered_norm_pos = transformPointsInverse(cur_subtable_reg_tform, cur_data_table.norm_pos);
-
 		end
 		out_pupillabs_struct.(cur_subtable_name) = cur_data_table;
 	end
