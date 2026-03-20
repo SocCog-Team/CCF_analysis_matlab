@@ -68,6 +68,7 @@ fq_mfilename = mfilename('fullpath');
 debug = 0;
 
 redo_gaze_calibration = 0;
+add_gaze_to_record2D_table = 1;
 
 
 % what threshold to use to detect up from down, with Mike Walsh's caltech
@@ -229,7 +230,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			switch cur_jsonl_name_sanitized
 				case 'pupillabs_data_dot_jsonl'
 					% fix up the timestamps for all subtables
-					request_list = {'fix_timestamps', 'apply_calibration'};
+					request_list = {'fix_timestamps', 'apply_registration'};
 					jsonl_struct.(cur_jsonl_name_sanitized) = fn_amend_pupillabs_data(jsonl_struct.(cur_jsonl_name_sanitized), cur_CCF_runfolder_FQN, json_struct.conf_dot_json, sessionID_struct, request_list);
 			end
 
@@ -356,11 +357,19 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		record2D_struct.table = squeeze(h5_struct.record2D_data)';
 		record2D_table = array2table(record2D_struct.table, 'VariableNames', record2D_struct.header);
 
+		if (add_gaze_to_record2D_table)
+			disp([mfilename, ': INFO: requested adding gaze data to record2D_table (tick aligned calibrated gaze data)']);
+			if isfield(jsonl_struct, 'pupillabs_data_dot_jsonl')
+				record2D_table = fn_add_gaze_data_to_record2D(record2D_table, jsonl_struct.pupillabs_data_dot_jsonl, 'pupillabs',  json_struct.conf_dot_json, {'^A0_pupillabs_pupil_dot_[0|1]_dot_2d'});
+			else
+				disp([mfilename, ': INFO: jsonl_struct does not contain pupillabs_data_dot_jsonl, skipping...']);
+			end
+		end
 
 		request_list = {'nan_out_invalid_aims_pos', 'nan_out_invalid_agent_pos', ...
 		'calc_and_store_distances_to_targets', ...
 		'add_per_target_changed_pos_col', ...
-		...'detect_agent_fixations', 'detect_aim_fixations', ...	% needs fixing
+		...'detect_agent_fixations', 'detect_aim_fixations', 'detect_eye_fixations', ...	% needs fixing
 		};
 
 		max_dispersion_threshold = json_struct.conf_dot_json.target_radius/2; % potentially define this in millimeter?
