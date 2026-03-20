@@ -75,6 +75,19 @@ end
 target_prefix_list = unique(target_prefix_list);
 
 
+% the number of targets in a run is not fixed, so detect it...
+eye_prefix_list ={};
+for i_col = 1 : length(record2D_colname_list)
+	cur_col_name = record2D_colname_list{i_col};
+	cur_eye_prefix_cell = regexp(cur_col_name, '^[A|B]_(right|left)_eye', 'match');
+	if ~isempty(cur_eye_prefix_cell)
+		eye_prefix_list = [eye_prefix_list, cur_eye_prefix_cell{1}];
+	end
+end
+eye_prefix_list = unique(eye_prefix_list);
+
+
+
 
 % FIXUP record2D_table
 
@@ -145,7 +158,8 @@ if ~isempty(target_radius) && ismember({'calc_and_store_distances_to_targets'}, 
 		cur_target_stem = target_prefix_list{i_target_IDX};
 
 		cur_target_pos_XY_list = [record2D_table.([cur_target_stem, '_X'])(:), record2D_table.([cur_target_stem, '_Y'])(:)];
-		cur_prefix_list = {'aims0', 'agent0', 'aims1', 'agent1'};
+		%cur_prefix_list = {'aims0', 'agent0', 'aims1', 'agent1'};
+		cur_prefix_list = [aim_prefix_list, agent_prefix_list, eye_prefix_list];
 		for i_cur_prefix = 1 : length(cur_prefix_list)
 			cur_prefix = cur_prefix_list{i_cur_prefix};
 			cur_new_col_name = ['distance_', cur_prefix, '_to_', cur_target_stem];
@@ -216,7 +230,7 @@ end
 if ismember({'detect_agent_fixations'}, request_list)
 	for i_agent = 1 : length(agent_prefix_list)
 		disp([mfilename, ': INFO: Processing requested detect_agent_fixations: ', agent_prefix_list{i_agent}]);
-		timestamps.(mfilename).detect_agent_fixations.(agent_prefix_list{i_aim}).start = tic;
+		timestamps.(mfilename).detect_agent_fixations.(agent_prefix_list{i_agent}).start = tic;
 		cur_agent = agent_prefix_list{i_agent};
 		cur_data_struct_of_arr.timestamp = record2D_table.timestamp * 1000;	% we want milliseconds
 		cur_data_struct_of_arr.X = record2D_table.([cur_agent, '_X']);
@@ -236,11 +250,44 @@ if ismember({'detect_agent_fixations'}, request_list)
 			axis equal
 			axis square
 		end
-		timestamps.(mfilename).detect_agent_fixations.(agent_prefix_list{i_aim}).end = toc;
-		duration_s = timestamps.(mfilename).detect_agent_fixations.(agent_prefix_list{i_aim}).end - timestamps.(mfilename).detect_agent_fixations.(agent_prefix_list{i_aim}).start;
-		disp(['detect_agent_fixations (', agent_prefix_list{i_aim}, ') took: ', num2str(duration_s), ' seconds.']);
+		timestamps.(mfilename).detect_agent_fixations.(agent_prefix_list{i_agent}).end = toc;
+		duration_s = timestamps.(mfilename).detect_agent_fixations.(agent_prefix_list{i_agent}).end - timestamps.(mfilename).detect_agent_fixations.(agent_prefix_list{i_agent}).start;
+		disp(['detect_agent_fixations (', agent_prefix_list{i_agent}, ') took: ', num2str(duration_s), ' seconds.']);
 	end
 end
+
+% TODO fix max_dispersion_threshold and min_fixation_duration_threshold_ms
+% for this...
+if ismember({'detect_eye_fixations'}, request_list)
+	for i_eye = 1 : length(eye_prefix_list)
+		disp([mfilename, ': INFO: Processing requested detect_eye_fixations: ', eye_prefix_list{i_eye}]);
+		timestamps.(mfilename).detect_agent_fixations.(agent_prefix_list{i_eye}).start = tic;
+		cur_eye = eye_prefix_list{i_eye};
+		cur_data_struct_of_arr.timestamp = record2D_table.timestamp * 1000;	% we want milliseconds
+		cur_data_struct_of_arr.X = record2D_table.([cur_eye, '_X']);
+		cur_data_struct_of_arr.Y = record2D_table.([cur_eye, '_Y']);
+		% local override
+		% max_dispersion_threshold = conf_struct.target_radius/2; 
+		% min_fixation_duration_threshold_ms = 100;
+		% isDraw = 1;		
+		cur_fixation_struct = fn_spatial_dispersion_fixation_detector(cur_data_struct_of_arr, max_dispersion_threshold, min_fixation_duration_threshold_ms, isDraw);
+		record2D_table.([cur_eye, '_per_sample_fixID']) = cur_fixation_struct.per_sample_fixID;
+		cur_fixation_struct = rmfield(cur_fixation_struct, 'per_sample_fixID');	% we move this into record2D already...
+		fixations_struct.(cur_eye) = cur_fixation_struct;
+		if (debug)
+			cur_fh = figure('Name', cur_eye);
+			plot(cur_fixation_struct.mean_X, cur_fixation_struct.mean_Y, 'LineWidth', 0.5, 'Marker', 'o');
+			cur_ah = gca();
+			axis equal
+			axis square
+		end
+		timestamps.(mfilename).detect_agent_fixations.(eye_prefix_list{i_eye}).end = toc;
+		duration_s = timestamps.(mfilename).detect_agent_fixations.(eye_prefix_list{i_eye}).end - timestamps.(mfilename).detect_agent_fixations.(eye_prefix_list{i_eye}).start;
+		disp(['detect_eye_fixations (', eye_prefix_list{i_eye}, ') took: ', num2str(duration_s), ' seconds.']);
+	end
+end
+
+
 
 
 timestamps.(mfilename).end = toc(timestamps.(mfilename).start);
