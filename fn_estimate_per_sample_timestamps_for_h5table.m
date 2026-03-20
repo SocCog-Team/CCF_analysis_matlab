@@ -17,7 +17,7 @@ if ~isempty(h5_struct) && ismember({[cur_base_name, '_data']}, fieldnames(h5_str
 	if ~isempty(h5_struct) && ismember({[cur_base_name, '_idx_ts_data']}, fieldnames(h5_struct))
 		% construct a python timestamp list
 		n_samples = size(data_struct.table, 1);
-		cur_header = json_struct.([cur_base_name, '_idx_ts_header'])';
+		cur_header = json_struct.([cur_base_name, '_idx_ts_header_dot_json'])';
 		cur_data = h5_struct.([cur_base_name, '_idx_ts_data'])';
 
 		if ~ismember({'batchsize'}, cur_header)
