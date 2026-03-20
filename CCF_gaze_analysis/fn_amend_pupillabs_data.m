@@ -5,6 +5,8 @@ function [ out_pupillabs_struct ] = fn_amend_pupillabs_data( in_pupillabs_struct
 
 gaze_subtable_list = fieldnames(in_pupillabs_struct);
 
+% potentioally make this configurable as argument, but polynomial order 2
+% generally seems the best solution...
 registration_type = 'polynomial'; % polynomial or affine
 
 % now run this separately for A0 and B1 instances...
@@ -53,10 +55,14 @@ for i_set = 1 : length(set_Side_list)
 			cur_data_table.(col_header) = corrected_local_timestamp_list;
 		end
 
-		if ismember({'apply_calibration'}, request_list) && ~isempty(cur_reg_struct)
-			disp([mfilename, ': INFO: applying gaze corrections']);
-			cur_subtable_reg_tform = cur_reg_struct.out_registration_struct.(cur_subtable_name).registration_struct.(registration_type).(cur_subtable_name).tform;
-			cur_data_table.registered_norm_pos = transformPointsInverse(cur_subtable_reg_tform, cur_data_table.norm_pos);
+		if ismember({'apply_registration'}, request_list)
+			if isempty(cur_reg_struct)
+				disp([mfilename, ': INFO: apply_registration requestd, but no gaze registartion file exists, skipping...']);
+			else
+				disp([mfilename, ': INFO: applying gaze corrections']);
+				cur_subtable_reg_tform = cur_reg_struct.out_registration_struct.(cur_subtable_name).registration_struct.(registration_type).(cur_subtable_name).tform;
+				cur_data_table.registered_norm_pos = transformPointsInverse(cur_subtable_reg_tform, cur_data_table.norm_pos);
+			end
 		end
 		out_pupillabs_struct.(cur_subtable_name) = cur_data_table;
 	end
