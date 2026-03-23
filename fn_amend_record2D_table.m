@@ -261,7 +261,7 @@ end
 if ismember({'detect_eye_fixations'}, request_list)
 	for i_eye = 1 : length(eye_prefix_list)
 		disp([mfilename, ': INFO: Processing requested detect_eye_fixations: ', eye_prefix_list{i_eye}]);
-		timestamps.(mfilename).detect_agent_fixations.(agent_prefix_list{i_eye}).start = tic;
+		timestamps.(mfilename).detect_eye_fixations.(agent_prefix_list{i_eye}).start = tic;
 		cur_eye = eye_prefix_list{i_eye};
 		cur_data_struct_of_arr.timestamp = record2D_table.timestamp * 1000;	% we want milliseconds
 		cur_data_struct_of_arr.X = record2D_table.([cur_eye, '_X']);
@@ -282,7 +282,7 @@ if ismember({'detect_eye_fixations'}, request_list)
 			axis square
 		end
 		timestamps.(mfilename).detect_agent_fixations.(eye_prefix_list{i_eye}).end = toc;
-		duration_s = timestamps.(mfilename).detect_agent_fixations.(eye_prefix_list{i_eye}).end - timestamps.(mfilename).detect_agent_fixations.(eye_prefix_list{i_eye}).start;
+		duration_s = timestamps.(mfilename).detect_eye_fixations.(eye_prefix_list{i_eye}).end - timestamps.(mfilename).detect_eye_fixations.(eye_prefix_list{i_eye}).start;
 		disp(['detect_eye_fixations (', eye_prefix_list{i_eye}, ') took: ', num2str(duration_s), ' seconds.']);
 	end
 end
