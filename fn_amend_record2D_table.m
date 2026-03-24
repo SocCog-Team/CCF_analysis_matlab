@@ -210,7 +210,7 @@ if ismember({'detect_aim_fixations'}, request_list)
 		% max_dispersion_threshold = conf_struct.target_radius/2; 
 		% min_fixation_duration_threshold_ms = 100;
 		% isDraw = 1;
-		cur_fixation_struct = fn_spatial_dispersion_fixation_detector(cur_data_struct_of_arr, max_dispersion_threshold, min_fixation_duration_threshold_ms, isDraw);
+		cur_fixation_struct = fn_spatial_dispersion_fixation_detector_CCF(cur_data_struct_of_arr, max_dispersion_threshold, min_fixation_duration_threshold_ms, isDraw);
 		record2D_table.([cur_aim, '_per_sample_fixID']) = cur_fixation_struct.per_sample_fixID;
 		cur_fixation_struct = rmfield(cur_fixation_struct, 'per_sample_fixID');	% we move this into record2D already...
 		fixations_struct.(cur_aim) = cur_fixation_struct;
@@ -239,7 +239,7 @@ if ismember({'detect_agent_fixations'}, request_list)
 		% max_dispersion_threshold = conf_struct.target_radius/2; 
 		% min_fixation_duration_threshold_ms = 100;
 		% isDraw = 1;		
-		cur_fixation_struct = fn_spatial_dispersion_fixation_detector(cur_data_struct_of_arr, max_dispersion_threshold, min_fixation_duration_threshold_ms, isDraw);
+		cur_fixation_struct = fn_spatial_dispersion_fixation_detector_CCF(cur_data_struct_of_arr, max_dispersion_threshold, min_fixation_duration_threshold_ms, isDraw);
 		record2D_table.([cur_agent, '_per_sample_fixID']) = cur_fixation_struct.per_sample_fixID;
 		cur_fixation_struct = rmfield(cur_fixation_struct, 'per_sample_fixID');	% we move this into record2D already...
 		fixations_struct.(cur_agent) = cur_fixation_struct;
@@ -270,7 +270,7 @@ if ismember({'detect_eye_fixations'}, request_list)
 		% max_dispersion_threshold = conf_struct.target_radius/2; 
 		% min_fixation_duration_threshold_ms = 100;
 		% isDraw = 1;		
-		cur_fixation_struct = fn_spatial_dispersion_fixation_detector(cur_data_struct_of_arr, max_dispersion_threshold, min_fixation_duration_threshold_ms, isDraw);
+		cur_fixation_struct = fn_spatial_dispersion_fixation_detector_CCF(cur_data_struct_of_arr, max_dispersion_threshold, min_fixation_duration_threshold_ms, isDraw);
 		record2D_table.([cur_eye, '_per_sample_fixID']) = cur_fixation_struct.per_sample_fixID;
 		cur_fixation_struct = rmfield(cur_fixation_struct, 'per_sample_fixID');	% we move this into record2D already...
 		fixations_struct.(cur_eye) = cur_fixation_struct;
