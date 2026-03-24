@@ -6,6 +6,10 @@ function [ triallog_table, record_struct, record2D_struct, AI_samples_struct, DI
 %	merge runs of a session, this likely requires special casing for
 %	targets (if different runs use different sets of target), spcial-casing
 %	collection and trial numbers, as well as modifying TDT data (re merging .SEV, datafilt, datafilt2, and dataspikes files according to the CCF timestamps)
+%	allow gz versions of all files and transparently unpack and repack them
+%	for each file check whether a .mat variant already exists and load that
+%	unless a full reprocessing was requested (this should speed up things like jsonl parsing and fixation detection...)
+%	GAZE: convert to pixel space (and from there to DVA space on request)
 %
 % DONE:
 %	implement looping over a base folder and pick the runfolders
@@ -108,22 +112,32 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 
 	% test 9-dot-calibration (with new jasonl format where the type is indicative of different record types that should be steered into individual subtables)
 	%Y:\SCP_DATA\SCP-CTRL-01\CCF\foraging_task_2_NHP\SESSIONLOGS\2026\260316\20260316T132749.A_BA.B_NONE.SCP_01.sessiondir
-	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260316', '20260316T132749.A_BA.B_NONE.SCP_01.sessiondir')};
+%	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260316', '20260316T132749.A_BA.B_NONE.SCP_01.sessiondir')};
 	% session recorded after the 9-dot-should use the same registration
 	% file, note this has broken target_state columns, but should serve for
 	% the gaze processing... this needs fixing by running the record2D
 	% files through the state machine again...
-	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260316', '20260316T133055.A_BA.B_NONE.SCP_01.sessiondir')};
+%	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260316', '20260316T133055.A_BA.B_NONE.SCP_01.sessiondir')};
 
-	%% first Elmo pupoillabs calibration session
+% Basak 2nd calibration and test session
+%Y:\SCP_DATA\SCP-CTRL-01\CCF\foraging_task_2_NHP\SESSIONLOGS\2026\260324\20260324T133634.A_BA.B_NONE.SCP_01.sessiondir
+	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260324', '20260324T133634.A_BA.B_NONE.SCP_01.sessiondir')};
+
+	%% first Elmo pupillabs calibration session
 	%% Y:\SCP_DATA\SCP-CTRL-01\CCF\foraging_task_2_NHP\SESSIONLOGS\2026\260319\20260319T110006.A_Elmo.B_NONE.SCP_01.sessiondir
 	%cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260319', '20260319T110006.A_Elmo.B_NONE.SCP_01.sessiondir')};
 	% first dyadic run with gaze tracking, use for gaze processing development 
-	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260319', '20260319T112338.A_Elmo.B_BA.SCP_01.sessiondir')};
+%	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260319', '20260319T112338.A_Elmo.B_BA.SCP_01.sessiondir')};
 
 %	% fixed state columns, looks good
 %	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260318', '20260318T164215.A_NONE.B_NONE.SCP_01.sessiondir')};
 	%cur_CCF_runfolder_FQN_list = fullfile(CCF_recordings_folder_FQN, '000_000', '19');
+
+	%% second Elmo pupillabs calibration session: NOTE no manual_calibration_state.jsonl log was recorded (the session was never started with SPACE)
+	%% Y:\SCP_DATA\SCP-CTRL-01\SESSIONLOGS\2026\260320\20260320T101256.A_Elmo.B_NONE.SCP_01.sessiondir
+	%cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260320', '20260320T101256.A_Elmo.B_NONE.SCP_01.sessiondir')};
+
+
 
 	% use a file picker to select the desired folder
 end
@@ -230,7 +244,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			switch cur_jsonl_name_sanitized
 				case 'pupillabs_data_dot_jsonl'
 					% fix up the timestamps for all subtables
-					request_list = {'fix_timestamps', 'apply_registration'};
+					request_list = {'fix_timestamps', 'apply_registration', 'convert_reg_norm_pos_to_eventide_pixel_pos'};
 					jsonl_struct.(cur_jsonl_name_sanitized) = fn_amend_pupillabs_data(jsonl_struct.(cur_jsonl_name_sanitized), cur_CCF_runfolder_FQN, json_struct.conf_dot_json, sessionID_struct, request_list);
 			end
 
@@ -357,6 +371,12 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		record2D_struct.table = squeeze(h5_struct.record2D_data)';
 		record2D_table = array2table(record2D_struct.table, 'VariableNames', record2D_struct.header);
 
+		%% seem to match...
+		%corrected_record2D_struct.header = json_struct.corrected_record2D_header_dot_json.record2D_column_names';
+		%corrected_record2D_struct.table = squeeze(h5_struct.corrected_record2D_data)';
+		%corrected_record2D_table = array2table(corrected_record2D_struct.table, 'VariableNames', corrected_record2D_struct.header);
+
+
 		if (add_gaze_to_record2D_table)
 			disp([mfilename, ': INFO: requested adding gaze data to record2D_table (tick aligned calibrated gaze data)']);
 			if isfield(jsonl_struct, 'pupillabs_data_dot_jsonl')
@@ -394,6 +414,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	else
 		target_prefix_list = {};
 		disp(['No record2D data found in ', cur_CCF_runfolder_FQN]);
+		return
 	end
 
 	% extract collection/trial start/stop timestamps from record2D
@@ -505,21 +526,21 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	end
 
 
-	% add reach/gaze position data to the triallog_table
-	tmp_state_name_list = [enum_struct.target_state.name_list'; sorted_target_state_transition_table.new_state_ENUM_name];
-	[unique_target_state_name_list, ~, proto_unique_target_state_name_list_row_idx] = unique(tmp_state_name_list, 'stable');
-	tick_idx_list_list = cell(size(unique_target_state_name_list));
-	for i_target_states = 2 : length(unique_target_state_name_list)
-		cur_target_state_name = unique_target_state_name_list{i_target_states};
-		cur_target_state_col_name = ['col_targ_', cur_target_state_name, '_tick_idx'];
-		tick_idx_list_list(i_target_states) = {cur_target_state_col_name};
+	if exist('sorted_target_state_transition_table', 'var')
+		% add reach/gaze position data to the triallog_table
+		tmp_state_name_list = [enum_struct.target_state.name_list'; sorted_target_state_transition_table.new_state_ENUM_name];
+		[unique_target_state_name_list, ~, proto_unique_target_state_name_list_row_idx] = unique(tmp_state_name_list, 'stable');
+		tick_idx_list_list = cell(size(unique_target_state_name_list));
+		for i_target_states = 2 : length(unique_target_state_name_list)
+			cur_target_state_name = unique_target_state_name_list{i_target_states};
+			cur_target_state_col_name = ['col_targ_', cur_target_state_name, '_tick_idx'];
+			tick_idx_list_list(i_target_states) = {cur_target_state_col_name};
+		end
+		tick_idx_list_list(1) = [];	% we started from entry 2 to skip NONE
+		tick_idx_list_list = [tick_idx_list_list; 'PDD_onset_tick_idx'];
+		tick_idx_ext = '_tick_idx';
+		[ triallog_table ] = fn_collect_fixations_around_tick_idx_lists( triallog_table, fixations_struct, record2D_table, tick_idx_list_list, tick_idx_ext);
 	end
-	tick_idx_list_list(1) = [];	% we started from entry 2 to skip NONE
-	tick_idx_list_list = [tick_idx_list_list; 'PDD_onset_tick_idx'];
-	tick_idx_ext = '_tick_idx';
-	[ triallog_table ] = fn_collect_fixations_around_tick_idx_lists( triallog_table, fixations_struct, record2D_table, tick_idx_list_list, tick_idx_ext);
-
-
 
 	% potentially add additinal per cycle columns
 	if ~isempty(additional_triallog_column_table)
