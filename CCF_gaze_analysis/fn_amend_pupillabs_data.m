@@ -63,6 +63,16 @@ for i_set = 1 : length(set_Side_list)
 				cur_subtable_reg_tform = cur_reg_struct.out_registration_struct.(cur_subtable_name).registration_struct.(registration_type).(cur_subtable_name).tform;
 				cur_data_table.registered_norm_pos = transformPointsInverse(cur_subtable_reg_tform, cur_data_table.norm_pos);
 			end
+			% this only makes sense with registred norm_pos
+			if ismember({'convert_reg_norm_pos_to_eventide_pixel_pos'}, request_list) && ismember({'registered_norm_pos'}, cur_data_table.Properties.VariableNames)
+				% to be used with fn_convert_pixels_2_DVA
+				cur_data_table.registered_pixel_pos = nan(size(cur_data_table.registered_norm_pos));
+				[cur_data_table.registered_pixel_pos(:, 1), cur_data_table.registered_pixel_pos(:, 2)] = fn_CCF_win_to_engine_pos(cur_data_table.registered_norm_pos(:, 1), cur_data_table.registered_norm_pos(:, 2), CCF_conf.field_size, CCF_conf.target_radius, CCF_conf.field_x_offset, CCF_conf.field_y_offset);
+				% eventide convention has (0,0) be top left (CCF uses (0,0): bottom
+				% left) so we adjust things accordingly so we can re-use
+				% existing gaze analysis code.
+				cur_data_table.registered_pixel_pos(:, 1:2) = CCF_conf.screen_height_pixel - cur_data_table.registered_pixel_pos(:, 1:2);
+			end
 		end
 		out_pupillabs_struct.(cur_subtable_name) = cur_data_table;
 	end
