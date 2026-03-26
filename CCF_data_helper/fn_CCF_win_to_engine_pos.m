@@ -1,5 +1,5 @@
 function [ X_pixel, Y_pixel ] = fn_CCF_win_to_engine_pos( X_rel, Y_rel, field_size, target_radius, field_x_offset, field_y_offset)
-%FN_CCF_RELATIVE_TO_PIXEL_POS Summary of this function goes here
+%FN_CCF_WIN_TO_ENGINE_POS Summary of this function goes here
 %   Convert from relative CCF game playing field coordinates to pixel space
 % Note to convert to EventIDE/D3D coordinates y needs to be flipped (screen_hight-pixel - Y_pixel)
 % This converts from CCF relative position within the playing field to
