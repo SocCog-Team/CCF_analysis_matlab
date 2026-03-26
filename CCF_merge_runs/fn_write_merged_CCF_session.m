@@ -60,12 +60,21 @@ end
 
 
 % ===== JSONL files =====
+% Each field is either a flat table (homogeneous file) or a struct with
+% sub-fields per record type (heterogeneous file). Heterogeneous files
+% are written by interleaving all sub-tables sorted by timestamp.
 jsonl_field_list = fieldnames(merged_data_struct.jsonl);
 for i_jsonl = 1 : length(jsonl_field_list)
 	cur_name = jsonl_field_list{i_jsonl};
-	cur_table = merged_data_struct.jsonl.(cur_name);
-	if ~isempty(cur_table)
-		fn_write_jsonl_file(fullfile(output_dir_FQN, [cur_name, '.jsonl']), cur_table);
+	cur_data = merged_data_struct.jsonl.(cur_name);
+	cur_output_FQN = fullfile(output_dir_FQN, [cur_name, '.jsonl']);
+
+	if istable(cur_data)
+		if ~isempty(cur_data)
+			fn_write_jsonl_file(cur_output_FQN, cur_data);
+		end
+	elseif isstruct(cur_data)
+		fn_write_heterogeneous_jsonl_file(cur_output_FQN, cur_data);
 	end
 end
 
@@ -171,5 +180,90 @@ if fid == -1
 end
 fwrite(fid, json_text);
 fclose(fid);
+
+end
+
+
+function fn_write_heterogeneous_jsonl_file(output_FQN, data_struct)
+%FN_WRITE_HETEROGENEOUS_JSONL_FILE Write a struct-of-tables as a single JSONL file.
+%   Each sub-field is a table (one record type). Records from all types
+%   are interleaved by timestamp. Each JSON line gets a 'record_type'
+%   field so the reader can reconstruct the struct-of-tables on load.
+
+sub_names = fieldnames(data_struct);
+
+% Convert all sub-tables to struct arrays in one shot per type, then
+% collect into a flat struct array with sort keys — avoids per-row table indexing.
+all_structs = [];
+all_sort_keys = [];
+
+for i_sub = 1 : length(sub_names)
+	cur_sub_name = sub_names{i_sub};
+	cur_data = data_struct.(cur_sub_name);
+
+	if isstruct(cur_data) && ~istable(cur_data)
+		if isscalar(cur_data)
+			cur_data = struct2table(cur_data);
+		else
+			cur_data = struct2table(cur_data, 'AsArray', true);
+		end
+	end
+
+	if ~istable(cur_data) || isempty(cur_data)
+		continue
+	end
+
+	% Bulk convert table to struct array
+	cur_struct_array = table2struct(cur_data);
+	n_rows = length(cur_struct_array);
+
+	% Add record_type field to all entries at once
+	[cur_struct_array.record_type] = deal(cur_sub_name);
+
+	% Extract sort keys (vectorized)
+	if ismember('timestamp_s', cur_data.Properties.VariableNames)
+		cur_sort_keys = cur_data.timestamp_s;
+	elseif ismember('timestamp', cur_data.Properties.VariableNames)
+		cur_sort_keys = cur_data.timestamp;
+	else
+		cur_sort_keys = (1:n_rows)' + (i_sub - 1) * 1e9;
+	end
+
+	% Encode each struct to a JSON string (one per row)
+	cur_json_lines = cell(n_rows, 1);
+	for i_row = 1 : n_rows
+		cur_json_lines{i_row} = jsonencode(cur_struct_array(i_row));
+	end
+
+	if isempty(all_sort_keys)
+		all_sort_keys = cur_sort_keys(:);
+		all_structs = cur_json_lines;
+	else
+		all_sort_keys = [all_sort_keys; cur_sort_keys(:)];
+		all_structs = [all_structs; cur_json_lines];
+	end
+end
+
+if isempty(all_structs)
+	disp(['fn_write_heterogeneous_jsonl_file: WARN: no data to write to: ', output_FQN]);
+	return
+end
+
+% Sort by timestamp and write
+[~, sort_idx] = sort(all_sort_keys);
+all_structs = all_structs(sort_idx);
+
+fid = fopen(output_FQN, 'w');
+if fid == -1
+	error(['fn_write_heterogeneous_jsonl_file: could not open: ', output_FQN]);
+end
+
+for i_row = 1 : length(all_structs)
+	fprintf(fid, '%s\n', all_structs{i_row});
+end
+
+fclose(fid);
+disp(['fn_write_heterogeneous_jsonl_file: wrote ', num2str(length(all_structs)), ...
+	' lines to: ', output_FQN]);
 
 end

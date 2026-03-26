@@ -52,6 +52,11 @@ addpath(genpath(CCF_analysis_path));
 if ~exist('sessiondir_merge_list_FQN', 'var') || isempty(sessiondir_merge_list_FQN)
 	sessiondir_merge_list_FQN = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251219', ...
 		'20251219TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir', 'merge_CCF_sessiondir_list.txt')};
+	sessiondir_merge_list_FQN = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', ...	% took 7674.839 seconds
+		'20260319TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir', 'merge_CCF_sessiondir_list.txt')};
+	sessiondir_merge_list_FQN = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', ...	% new jsonl logic
+		'20260319TNNNNNNM2.A_Elmo.B_MIXED.SCP_01.sessiondir', 'merge_CCF_sessiondir_list.txt')};
+	
 end
 
 if iscell(sessiondir_merge_list_FQN)
@@ -202,72 +207,67 @@ disp([mfilename, ': merged record2D: ', num2str(size(merged_record2D_data, 1)), 
 
 
 % =====================================================================
-%  9. MERGE JSONL FILES
+%  9. MERGE JSONL FILES (streaming: read → adjust → write directly)
 % =====================================================================
-merged_jsonl = struct();
-
-% % --- reward_trains: offset collection_number ---
-% merged_reward_trains = [];
-% for i_run = 1 : n_runs
-% 	if isfield(raw_data_list{i_run}.jsonl_struct, 'reward_trains')
-% 		cur_table = raw_data_list{i_run}.jsonl_struct.reward_trains;
-% 		if ismember({'collection_number'}, cur_table.Properties.VariableNames)
-% 			cur_table.collection_number = cur_table.collection_number + collection_offset_list(i_run);
-% 		end
-% 		cur_table.run_idx = repmat(int32(i_run - 1), size(cur_table, 1), 1);
-% 		if isempty(merged_reward_trains)
-% 			merged_reward_trains = cur_table;
-% 		else
-% 			merged_reward_trains = [merged_reward_trains; cur_table];
-% 		end
-% 	end
-% end
-% merged_jsonl.reward_trains = merged_reward_trains;
-% 
-% % --- DO_messages: concatenate (absolute timestamps, no offset needed) ---
-% merged_DO_messages = [];
-% for i_run = 1 : n_runs
-% 	if isfield(raw_data_list{i_run}.jsonl_struct, 'DO_messages')
-% 		cur_table = raw_data_list{i_run}.jsonl_struct.DO_messages;
-% 		if ismember({'collection_number'}, cur_table.Properties.VariableNames)
-% 			cur_table.collection_number = cur_table.collection_number + collection_offset_list(i_run);
-% 		end
-% 		cur_table.run_idx = repmat(int32(i_run - 1), size(cur_table, 1), 1);
-% 		if isempty(merged_DO_messages)
-% 			merged_DO_messages = cur_table;
-% 		else
-% 			merged_DO_messages = [merged_DO_messages; cur_table];
-% 		end
-% 	end
-% end
-% merged_jsonl.DO_messages = merged_DO_messages;
-
-% --- Any other JSONL files: concatenate with run_idx ---
-% the generic solution should work for all
-%known_jsonl_names = {'reward_trains', 'DO_messages'};
-known_jsonl_names = {};
+% --- Streaming JSONL merge: read → adjust → write, one line at a time ---
+% Discover all unique JSONL filenames across runs
+all_jsonl_filename_list = {};
 for i_run = 1 : n_runs
-	if ~isempty(raw_data_list{i_run}.jsonl_struct)
-		jsonl_names = fieldnames(raw_data_list{i_run}.jsonl_struct);
-		for i_jn = 1 : length(jsonl_names)
-			cur_name = jsonl_names{i_jn};
-			if ~ismember(cur_name, known_jsonl_names)
-				if ~isfield(merged_jsonl, cur_name)
-					merged_jsonl.(cur_name) = [];
-				end
-				cur_table = raw_data_list{i_run}.jsonl_struct.(cur_name);
-				if ismember({'collection_number'}, cur_table.Properties.VariableNames)
-					cur_table.collection_number = cur_table.collection_number + collection_offset_list(i_run);
-				end
-				cur_table.run_idx = repmat(int32(i_run - 1), size(cur_table, 1), 1);
-				if isempty(merged_jsonl.(cur_name))
-					merged_jsonl.(cur_name) = cur_table;
-				else
-					merged_jsonl.(cur_name) = [merged_jsonl.(cur_name); cur_table];
-				end
-			end
-		end
+	cur_dir = char(sessiondir_merge_list(i_run));
+	cur_jsonl_dir_struct = dir(fullfile(cur_dir, '*.jsonl'));
+	for i_f = 1 : length(cur_jsonl_dir_struct)
+		all_jsonl_filename_list{end+1} = cur_jsonl_dir_struct(i_f).name;
 	end
+end
+unique_jsonl_filename_list = unique(all_jsonl_filename_list);
+
+for i_jn = 1 : length(unique_jsonl_filename_list)
+	cur_jsonl_filename = unique_jsonl_filename_list{i_jn};
+	output_FQN = fullfile(merged_sessiondir_FQN, cur_jsonl_filename);
+
+	fid_out = fopen(output_FQN, 'w');
+	if fid_out == -1
+		error([mfilename, ': could not open for writing: ', output_FQN]);
+	end
+
+	n_lines_total = 0;
+	for i_run = 1 : n_runs
+		cur_source_FQN = fullfile(char(sessiondir_merge_list(i_run)), cur_jsonl_filename);
+		if ~isfile(cur_source_FQN)
+			continue
+		end
+
+		fid_in = fopen(cur_source_FQN, 'r');
+		if fid_in == -1
+			continue
+		end
+
+		while true
+			cur_line = fgetl(fid_in);
+			if isequal(cur_line, -1)
+				break
+			end
+			if isempty(strtrim(cur_line))
+				continue
+			end
+
+			cur_record = jsondecode(cur_line);
+
+			if isfield(cur_record, 'collection_number')
+				cur_record.collection_number = cur_record.collection_number + collection_offset_list(i_run);
+			end
+
+			cur_record.run_idx = int32(i_run - 1);
+
+			fprintf(fid_out, '%s\n', jsonencode(cur_record));
+			n_lines_total = n_lines_total + 1;
+		end
+
+		fclose(fid_in);
+	end
+
+	fclose(fid_out);
+	disp([mfilename, ': wrote ', num2str(n_lines_total), ' lines to: ', output_FQN]);
 end
 
 
@@ -372,7 +372,7 @@ merged_data_struct.DI_samples_header = merged_DI_header;
 merged_data_struct.DI_samples_idx_ts_data = merged_DI_idx_ts_data;
 merged_data_struct.DI_samples_idx_ts_header = merged_DI_idx_ts_header;
 
-merged_data_struct.jsonl = merged_jsonl;
+merged_data_struct.jsonl = struct();	% JSONL files already written by streaming merge
 merged_data_struct.csv = merged_csv;
 merged_data_struct.enums_text = raw_data_list{1}.enums_text;
 
@@ -399,5 +399,30 @@ disp([mfilename, ': merge complete. Output: ', merged_sessiondir_FQN]);
 timestamps.(mfilename).end = toc(timestamps.(mfilename).start);
 disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end), ' seconds.']);
 disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end / 60), ' minutes.']);
+
+end
+
+
+% =====================================================================
+%  LOCAL HELPERS
+% =====================================================================
+
+function merged_table = fn_merge_one_jsonl_table(merged_table, cur_table, collection_offset, run_idx_0based)
+%FN_MERGE_ONE_JSONL_TABLE Offset collection_number, add run_idx, and concatenate.
+
+if isempty(cur_table) || size(cur_table, 1) == 0
+	return
+end
+
+if ismember({'collection_number'}, cur_table.Properties.VariableNames)
+	cur_table.collection_number = cur_table.collection_number + collection_offset;
+end
+cur_table.run_idx = repmat(int32(run_idx_0based), size(cur_table, 1), 1);
+
+if isempty(merged_table)
+	merged_table = cur_table;
+else
+	merged_table = [merged_table; cur_table];
+end
 
 end
