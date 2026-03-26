@@ -12,6 +12,7 @@ n_feature_ids = length(feature_id_num_list);
 for i_feature_id = 1 : n_feature_ids
 	cur_feature_id = feature_id_num_list(i_feature_id);
 	cur_feature_id_sample_ldx = (sample_timestamp_list >= start_ts_list(i_feature_id)) & (sample_timestamp_list <= end_ts_list(i_feature_id));
+	%cur_feature_id_sample_idx = find(cur_feature_id_sample_ldx);
 	per_sample_feature_list(cur_feature_id_sample_ldx) = cur_feature_id;
 end
 

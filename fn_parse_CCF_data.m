@@ -10,7 +10,11 @@ function [ triallog_table, record_struct, record2D_struct, AI_samples_struct, DI
 %	for each file check whether a .mat variant already exists and load that
 %	unless a full reprocessing was requested (this should speed up things like jsonl parsing and fixation detection...)
 %	GAZE: convert to pixel space (and from there to DVA space on request)
-%
+%	if DO_messages.jsonl exists and a TDT tank calculate the time
+%		conversion data and store the struct (desired for session merging)
+%		add a CCF timestamp vecor for the full rate data as well as a
+%		vector of converted timestamps for into the dataspikes files
+%		this is intended to help merging sessions...
 % DONE:
 %	implement looping over a base folder and pick the runfolders
 %	automatically, changed by moving to better named "run folders"
@@ -80,6 +84,7 @@ add_gaze_to_record2D_table = 1;
 % gain set correctly
 photodiode_AI_analog_threshold_V = 2.5;	% give it some slack
 
+use_cached_parsed_jsonl = 1;	% set to zero if you want to force reparsing
 
 
 if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_list)
@@ -107,8 +112,6 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260204', '20260204T115759.A_Elmo.B_JL.SCP_01.sessiondir') ...
 		};
 
-	% test file for merged session parsing...
-	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251219', '20251219TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir')};
 
 	% test 9-dot-calibration (with new jasonl format where the type is indicative of different record types that should be steered into individual subtables)
 	%Y:\SCP_DATA\SCP-CTRL-01\CCF\foraging_task_2_NHP\SESSIONLOGS\2026\260316\20260316T132749.A_BA.B_NONE.SCP_01.sessiondir
@@ -121,7 +124,7 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 
 % Basak 2nd calibration and test session
 %Y:\SCP_DATA\SCP-CTRL-01\CCF\foraging_task_2_NHP\SESSIONLOGS\2026\260324\20260324T133634.A_BA.B_NONE.SCP_01.sessiondir
-	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260324', '20260324T133634.A_BA.B_NONE.SCP_01.sessiondir')};
+%	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260324', '20260324T133634.A_BA.B_NONE.SCP_01.sessiondir')};
 
 	%% first Elmo pupillabs calibration session
 	%% Y:\SCP_DATA\SCP-CTRL-01\CCF\foraging_task_2_NHP\SESSIONLOGS\2026\260319\20260319T110006.A_Elmo.B_NONE.SCP_01.sessiondir
@@ -137,7 +140,15 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 	%% Y:\SCP_DATA\SCP-CTRL-01\SESSIONLOGS\2026\260320\20260320T101256.A_Elmo.B_NONE.SCP_01.sessiondir
 	%cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260320', '20260320T101256.A_Elmo.B_NONE.SCP_01.sessiondir')};
 
+	% elmo calibration
+	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260325', '20260325T094322.A_Elmo.B_NONE.SCP_01.sessiondir')};
 
+
+	% test file for merged session parsing...without pupillabs_data.jsonl
+	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251219', '20251219TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir')};
+
+	% test file for merged session parsing... with pupillabs_data.jsonl
+	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', '20260319TNNNNNNM2.A_Elmo.B_MIXED.SCP_01.sessiondir')};
 
 	% use a file picker to select the desired folder
 end
@@ -238,8 +249,67 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		% this will likely fail for complex or (too) large json files...
 		tmp_string_data = fileread(cur_jsonl_FQN);
 		if ~isempty(tmp_string_data)
-			%parsed_jsonl = fn_parse_jsonl_file(cur_jsonl_FQN);
-			jsonl_struct.(cur_jsonl_name_sanitized) = fn_parse_jsonl_file(cur_jsonl_FQN); %TODO: save these out as parsed .mat files and simply reload these ubnless a re-parsing is requested (also pack the raw jsonl files with gzip to save some space...)
+			cur_jsonl_mat_fqn = [cur_jsonl_FQN, '.mat'];
+			cur_jsonl_mat_fqn_dirstruct = dir(cur_jsonl_mat_fqn);
+			%use_cached_parsed_jsonl = 1;	% does not work right now
+			if (~use_cached_parsed_jsonl || ~isfile(cur_jsonl_mat_fqn) || cur_jsonl_mat_fqn_dirstruct.bytes < 10)
+				%parsed_jsonl = fn_parse_jsonl_file(cur_jsonl_FQN);
+				disp([mfilename, ': INFO: parsing: ', cur_jsonl_FQN]);
+				timestamps.(mfilename).start_cur_jsonl_name_sanitized = tic;
+				cur_parsed_jsonl = fn_parse_jsonl_file(cur_jsonl_FQN); %TODO: save these out as parsed .mat files and simply reload these unless a re-parsing is requested (also pack the raw jsonl files with gzip to save some space...)
+				jsonl_struct.(cur_jsonl_name_sanitized) = cur_parsed_jsonl;
+				timestamps.(mfilename).end_cur_jsonl_name_sanitized = toc(timestamps.(mfilename).start_cur_jsonl_name_sanitized);
+				disp([mfilename, ' parsing ', cur_jsonl_name_sanitized, ' took: ', num2str(timestamps.(mfilename).end_cur_jsonl_name_sanitized), ' seconds.']);
+
+				% this will fail currently as the struct of tables does not
+				% seem to allow getByteStreamFromArray
+				if (use_cached_parsed_jsonl)
+					s = warning('error', 'MATLAB:save:sizeTooBigForMATFile');
+					try
+						save(cur_jsonl_mat_fqn, 'cur_parsed_jsonl');
+					catch ME
+						disp(ME.identifier);
+						% delete the partially written file
+						disp(['Save aborted halfway through, deleting partially written: ', cur_jsonl_mat_fqn]);
+						delete(cur_jsonl_mat_fqn);
+						
+						% type specific clean up (to make this fit into normal matlab files)
+						switch cur_jsonl_name_sanitized
+							case 'pupillabs_data_dot_jsonl'
+								% add those columns we really need and
+								% leave out the nested structures
+								columns_to_keep_list = {'type', 'receive_timestamp_s', 'collection_number', 'norm_pos', 'diameter', 'confidence', 'timestamp', 'run_idx', 'diameter_3d', 'model_confidence'};
+								cur_subtable_name_list = fieldnames(cur_parsed_jsonl);
+								for i_subtable = 1 : length(cur_subtable_name_list)
+									cur_subtable_col_names = cur_parsed_jsonl.(cur_subtable_name_list{i_subtable}).Properties.VariableNames;
+									colums_to_drop_ldx = ~ismember(cur_subtable_col_names, columns_to_keep_list);
+									cur_parsed_jsonl.(cur_subtable_name_list{i_subtable})(:, colums_to_drop_ldx) = [];
+								end
+								disp('Saving with reduced set of columns...');
+								save(cur_jsonl_mat_fqn, 'cur_parsed_jsonl');
+
+							otherwise
+								disp([mfilename, ': WARN: could not save cur_jsonl_mat_fqn']);
+						end
+
+						% restore warnings
+						clear cur_parsed_jsonl
+					end
+					warning(s);
+				end
+			else
+				disp([mfilename, ': INFO: loading: ', cur_jsonl_mat_fqn]);
+				tmp = load(cur_jsonl_mat_fqn, 'cur_parsed_jsonl');
+				if isfield(tmp, 'byteStreamed_cur_parsed_jsonl')
+					cur_parsed_jsonl = getArrayFromByteStream(tmp.byteStreamed_cur_parsed_jsonl);
+				else
+					cur_parsed_jsonl = tmp.cur_parsed_jsonl;
+					clear tmp
+				end
+				jsonl_struct.(cur_jsonl_name_sanitized) = cur_parsed_jsonl;
+				clear cur_parsed_jsonl
+
+			end
 			% fix timestamps for gaze data
 			switch cur_jsonl_name_sanitized
 				case 'pupillabs_data_dot_jsonl'

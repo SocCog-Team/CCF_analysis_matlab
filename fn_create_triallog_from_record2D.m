@@ -564,6 +564,20 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 
 	% within the current collected target find the state transitions
 	% related to the rewarded collection
+
+	% for merged sessions this can contain NaNs which areequivalent with
+	% false
+	if any(isnan(record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent0'])))
+		record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent0'])(isnan(record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent0'])(:))) = false;
+		disp([mfilename, ': WARN: *_collecting_by_agent0 contains NaNs, which can happen in merged sessions, setting to false']);
+	end
+	if any(isnan(record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent1'])))
+		record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent1'])(isnan(record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent1'])(:))) = false;
+		disp([mfilename, ': WARN: *_collecting_by_agent1 contains NaNs, which can happen in merged sessions, setting to false']);
+	end
+
+
+
 	agent0_is_collecting_cur_target_list = record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent0'])(:);
 	agent1_is_collecting_cur_target_list = record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent1'])(:);
 
