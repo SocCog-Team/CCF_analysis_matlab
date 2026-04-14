@@ -59,12 +59,30 @@ for i_gaze_subtable = 1 : length(include_idx)
 	data_table.([output_source_stem, '_X']) = interpolated_norm_pos(:, 1);
 	data_table.([output_source_stem, '_Y']) = interpolated_norm_pos(:, 2);
 
+	if ismember({'registered_pixel_pos'}, cur_gaze_subtable_col_names)
+		cur_interpolated_norm_pos = interp1(cur_gaze_subtable.(gaze_timestamp_col_name), cur_gaze_subtable.registered_pixel_pos, data_table.timestamp, norm_pos_interp_method_string);
+		data_table.([output_source_stem, '_X_pixel']) = cur_interpolated_norm_pos(:, 1);
+		data_table.([output_source_stem, '_Y_pixel']) = cur_interpolated_norm_pos(:, 2);
+	end
+
+	if ismember({'registered_dva_pos'}, cur_gaze_subtable_col_names)
+		cur_interpolated_norm_pos = interp1(cur_gaze_subtable.(gaze_timestamp_col_name), cur_gaze_subtable.registered_dva_pos, data_table.timestamp, norm_pos_interp_method_string);
+		data_table.([output_source_stem, '_X_dva']) = cur_interpolated_norm_pos(:, 1);
+		data_table.([output_source_stem, '_Y_dva']) = cur_interpolated_norm_pos(:, 2);
+	end
+
+
 	interpolated_diameter = interp1(cur_gaze_subtable.(gaze_timestamp_col_name), cur_gaze_subtable.diameter, data_table.timestamp, diameter_interp_method_string);
 	data_table.([output_source_stem, '_pupildiameter']) = interpolated_diameter;
 
 	interpolated_confidence = interp1(cur_gaze_subtable.(gaze_timestamp_col_name), cur_gaze_subtable.confidence, data_table.timestamp, confidence_interp_method_string);
 	data_table.([output_source_stem, '_confidence']) = interpolated_confidence;
 end	
+
+
+% TODO potentially synthesize binocular data (including the x-delta) to get
+% a proxy for vergence
+
 
 
 end
