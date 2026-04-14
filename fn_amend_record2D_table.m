@@ -1,4 +1,4 @@
-function [ record2D_table, fixations_struct ] = fn_amend_record2D_table( record2D_table, conf_struct, request_list, max_dispersion_threshold, min_fixation_duration_threshold_ms )
+function [ record2D_table, fixations_struct ] = fn_amend_record2D_table( record2D_table, conf_struct, request_list, max_dispersion_threshold, min_fixation_duration_threshold_ms, GAZE_OPTS_struct )
 %FN_AMEND_RECORD2D_TABLE Summary of this function goes here
 %   Detailed explanation goes here
 
@@ -175,6 +175,76 @@ if ~isempty(target_radius) && ismember({'calc_and_store_distances_to_targets'}, 
 	%disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end_on_target), ' seconds.']);
 end
 
+
+% we 
+if ~isempty(target_radius) && ismember({'calc_and_store_gaze_distance_to_face_region'}, request_list)
+	disp([mfilename, ': INFO: Processing requested calc_and_store_gaze_distance_to_face_region']);
+
+	% face center coordinates should be independent of species and side, if
+	% both agents are well aligned
+	face_center_x_pixel = GAZE_OPTS_struct.HP.A.x_screen_intereye_pix;
+	face_center_y_pixel = GAZE_OPTS_struct.HP.A.y_screen_clostest2eye_pix;	% Note this is in EventIDE pixel coordinates, which are y-flipped compared to CCF's, so are gaze pixel coordinates
+
+	% check the gaze sources
+	valid_gaze_data_column_idx = contains(record2D_colname_list, regexpPattern('^[A|B]_(left|right)_eye_[X|Y]+'));
+	valid_gaze_data_column_names = record2D_colname_list(valid_gaze_data_column_idx);
+
+	% get rid of the Y...
+	valid_gaze_source_stem_names = unique(regexprep(valid_gaze_data_column_names, '_[X|Y]', '_X'));
+
+
+	for i_valid_gaze_stem = 1 : length(valid_gaze_source_stem_names)
+		cur_gaze_stem = valid_gaze_source_stem_names{i_valid_gaze_stem};
+		% now get the side:
+		cur_side = cur_gaze_stem(1);
+
+		cur_gaze_unit = 'CCF';
+		if contains(cur_gaze_stem, regexpPattern('_pixel$'))
+			cur_gaze_unit = 'pixel';
+		elseif contains(cur_gaze_stem, regexpPattern('_dva$'))
+			cur_gaze_unit = 'dva';	% this needs special care, so maybe skip it for now
+			disp([mfilename, ': DVA needs separate calculations for left and right eye, for now just skip...']);
+			continue
+		end
+
+		% we need this for dva
+		cur_eye_side = regexp(cur_gaze_stem, '(left|right)', 'match');
+		cur_eye_side = cur_eye_side{1};
+
+		cur_prefix = regexprep(cur_gaze_stem, '_X', '');
+		cur_X_col_name = cur_gaze_stem;
+		cur_Y_col_name = regexprep(cur_X_col_name, '_X', '_Y');
+
+		% the face center position
+		switch cur_gaze_unit
+			case 'pixel'
+				cur_face_center_X = GAZE_OPTS_struct.HP.A.x_screen_intereye_pix;
+				cur_face_center_Y  = GAZE_OPTS_struct.HP.A.y_screen_clostest2eye_pix;
+				face_center_x_pixel = GAZE_OPTS_struct.HP.A.x_screen_intereye_pix;
+				face_center_y_pixel = GAZE_OPTS_struct.HP.A.y_screen_clostest2eye_pix;	% Note this is in EventIDE pixel coordinates, which are y-flipped compared to CCF's, so are gaze pixel coordinates
+				cur_gaze_unit = ['_', cur_gaze_unit];
+			case 'CCF'
+				% face_center_y_pixel is in EventIDE pxel coordinates, we
+				% need to convert to CCF pixels first
+				[cur_face_center_X, cur_face_center_Y] = fn_CCF_engine_to_win_pos(face_center_x_pixel, (conf_struct.screen_height_pixel - face_center_y_pixel), conf_struct.field_size, conf_struct.target_radius, conf_struct.field_x_offset, conf_struct.field_y_offset);
+				cur_gaze_unit = '';
+		end
+		
+		cur_new_col_name = ['distance_', cur_prefix, '_to_', 'facecenter', cur_gaze_unit];
+		
+		cur_prefix_pos_XY_list = [record2D_table.(cur_X_col_name)(:), record2D_table.(cur_Y_col_name)(:)];
+		cur_target_pos_XY_list = repmat([cur_face_center_X, cur_face_center_Y], size(cur_prefix_pos_XY_list, 1), 1);
+
+		record2D_table.(cur_new_col_name) = vecnorm((cur_target_pos_XY_list - cur_prefix_pos_XY_list), 2, 2);	% way faster than calling norm row by row...
+		%record2D_table.([cur_prefix, '_on_', cur_target_stem]) =
+		%record2D_table.(cur_new_col_name) < target_radius;	% faces do not
+		%have a fixed "radius", even though the human face at playing
+		%distance is about 1/3 of the playing field wide, so 1/6 of playing
+		%field seems reasonable radius
+	end
+	%timestamps.(mfilename).end_on_target = toc(timestamps.(mfilename).start_on_target);
+	%disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end_on_target), ' seconds.']);
+end
 
 
 if ismember({'add_per_target_changed_pos_col'}, request_list)
