@@ -1,4 +1,4 @@
-function [ triallog_table, record_struct, record2D_struct, AI_samples_struct, DI_samples_struct, json_struct, h5_struct, txt_struct, jsonl_struct, enum_struct, fixations_struct ] = fn_parse_CCF_data( cur_CCF_runfolder_FQN_list )
+function [ triallog_table, record_struct, record2D_struct, AI_samples_struct, DI_samples_struct, json_struct, h5_struct, txt_struct, jsonl_struct, enum_struct, fixations_struct ] = fn_parse_CCF_data( cur_CCF_runfolder_FQN_list, GAZE_OPTS_struct )
 %FN_PARSE_CCF_DATA Summary of this function goes here
 %   Detailed explanation goes here
 %
@@ -85,6 +85,58 @@ add_gaze_to_record2D_table = 1;
 photodiode_AI_analog_threshold_V = 2.5;	% give it some slack
 
 use_cached_parsed_jsonl = 1;	% set to zero if you want to force reparsing
+
+
+
+if ~exist('GAZE_OPTS_struct', 'var') || isempty(GAZE_OPTS_struct)
+	%GAZE_OPTS_struct.per_session_resultdir_FQD = fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', 'per_session_data_collection', 'GAZE_TOUCH');	% where to store the per session results in addition to the local storage, keep empty to ignore
+	%GAZE_OPTS_struct.GAZE_PETH_subdir_name = 'GAZE_TOUCH'; % relative to a session dir
+	%GAZE_OPTS_struct.requested_processings_list = {'PETH'};	% PETH or TBD full trace
+	%GAZE_OPTS_struct.GAZE_data_prefix = 'BINOCCULAR_RAW_resampled_registered_';	% which data to operate on RIGHT_EYE_RAW_resampled_registered_, LEFT_EYE_RAW_resampled_registered_
+	GAZE_OPTS_struct.SCP_01.fixation_detection_method = 'iDT';	% % following Salvucci, Goldberg (2000), only iDT implemented yet (PETH data are already iVT processed with coarse limt of 50 DVA(second
+	GAZE_OPTS_struct.SCP_01.show_fixation_detection = 0;		% show the detected fixations
+	GAZE_OPTS_struct.SCP_01.iDT.max_dispersion_threshold_pixel = 20;	% how much dispersion will we accept, iin pixel
+	GAZE_OPTS_struct.SCP_01.iDT.max_dispersion_threshold_dva = 2.0;	% how much dispersion will we accept, in DVA, diameter of a gaze permission disc
+
+	GAZE_OPTS_struct.SCP_01.iDT.min_duration_threshold_ms = 80;	% how long does a proto fixation need to last to be considered a true fixation?
+	GAZE_OPTS_struct.SCP_01.eye2screen_mm = 350;% for NHP 35cm
+	GAZE_OPTS_struct.SCP_01.pixel_size_mm = ((1209.4/1920) + (680.4/1080)) * 0.5;% for the OLED screen the pixels are slight asymmetric
+	GAZE_OPTS_struct.SCP_01.simple_pix2dva_factor = atand((GAZE_OPTS_struct.SCP_01.pixel_size_mm) / (GAZE_OPTS_struct.SCP_01.eye2screen_mm));
+
+	%GAZE_OPTS_struct.last_pre_event_fix.require_straddling_event = 1;	% this is needed to clean up the pre_event window, so we require the pre_event fixation to span o/over the respective event
+	%GAZE_OPTS_struct.last_pre_event_fix.min_pre_event_offset_ms = -50;	% for the pre event fixation, how close to the event the fixation needs to end
+	%GAZE_OPTS_struct.first_post_event_fix.max_post_event_onset_ms = 250;	% for the post event fixation
+	%GAZE_OPTS_struct.pre_event_window = [-400, 0];	% for raw averaging of fixation location, or for selectng the window for fixation to target detection
+	%GAZE_OPTS_struct.post_event_window = [0, 400];	% for raw averaging of fixation location
+	%GAZE_OPTS_struct.target_fixation_max_allowed_distance_dva = 4;	% how far away from a target (S or O) a fixation is acceptable
+	%GAZE_OPTS_struct.target_fixation_max_allowed_distance_pixel = 40;
+
+
+	GAZE_OPTS_struct.SCP_01.report_unit = 'pixel';% pixel or dva
+	GAZE_OPTS_struct.SCP_01.report_unit = 'dva';% pixel or dva
+
+	% calibration data for SCP01
+	GAZE_OPTS_struct.SCP_01.NHP.A.eye2srceen_distance_mm = 350;
+	GAZE_OPTS_struct.SCP_01.NHP.B.eye2srceen_distance_mm = 350;
+	GAZE_OPTS_struct.SCP_01.HP.A.eye2srceen_distance_mm = 500;
+	GAZE_OPTS_struct.SCP_01.HP.B.eye2srceen_distance_mm = 500;
+	GAZE_OPTS_struct.SCP_01.NHP.A.x_screen_intereye_pix = 960;				% with ~6cm inter pupil distance for human, this would be 3cm num2str(960 + (30 * 1920/1209.4)) = 1007.6269 or 912.3731, and for monkeys ~3.5cm inter pupil distance:  num2str(960 + (35/2 * 1920/1209.4)) 987.7824 or 932.2176
+	GAZE_OPTS_struct.SCP_01.NHP.A.y_screen_clostest2eye_pix = 341.27;		% with ~6cm inter pupil distance for human, this would be 3cm num2str(960 + (30 * 1920/1209.4)) = 1007.6269 or 912.3731, and for monkeys ~3.5cm inter pupil distance:  num2str(960 + (35/2 * 1920/1209.4)) 987.7824 or 932.2176
+	GAZE_OPTS_struct.SCP_01.NHP.B.x_screen_intereye_pix = 960;				% the screen pixel coordinate of where the binoccular (head) gaze axis meets the screen
+	GAZE_OPTS_struct.SCP_01.NHP.B.y_screen_clostest2eye_pix = 341.27;		% the screen pixel coordinate of the eye
+	GAZE_OPTS_struct.SCP_01.HP.A.x_screen_intereye_pix = 960;
+	GAZE_OPTS_struct.SCP_01.HP.A.y_screen_clostest2eye_pix = 341.27;
+	GAZE_OPTS_struct.SCP_01.HP.B.x_screen_intereye_pix = 960;				% the screen pixel coordinate of the eye
+	GAZE_OPTS_struct.SCP_01.HP.B.y_screen_clostest2eye_pix = 341.27;		% the screen pixel coordinate of the eye
+	GAZE_OPTS_struct.SCP_01.NHP.inter_pupillary_distance_mm = 35;			% see https://www.sciencedirect.com/science/article/pii/S0165027019301591 other reports are 25-35mm
+	GAZE_OPTS_struct.SCP_01.HP.inter_pupillary_distance_mm = 63;			% see https://en.wikipedia.org/wiki/Pupillary_distance
+	GAZE_OPTS_struct.SCP_01.x_center_pix = 960;							% the virtual gaze center in X pixels
+	GAZE_OPTS_struct.SCP_01.y_center_pix = 580;							% the virtual gaze center in Y pixels
+
+	% which fixation types to export
+	%GAZE_OPTS_struct.PETH.fixation_type_set_list = {'last_pre_event_fix', 'first_post_event_fix', 'pre_S_sacc2targ_fix', 'post_S_sacc2targ_fix', 'pre_O_sacc2targ_fix', 'post_O_sacc2targ_fix'};
+
+end
 
 
 if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_list)
@@ -236,6 +288,20 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		end
 	end
 
+
+	% this comes from conf.py, and should autoadapt
+	if isfield(json_struct, 'conf_dot_json')
+		if isfield(GAZE_OPTS_struct, json_struct.conf_dot_json.setup_id)
+			GAZE_OPTS_struct = GAZE_OPTS_struct.(json_struct.conf_dot_json.setup_id);
+		end
+		if isfield(json_struct.conf_dot_json, 'screen_height_mn') && ~isfield(json_struct.conf_dot_json, 'screen_height_mm')
+			json_struct.conf_dot_json.screen_height_mm = json_struct.conf_dot_json.screen_height_mn;
+		end
+		GAZE_OPTS_struct.pixel_size_mm = ((json_struct.conf_dot_json.screen_width_mm/json_struct.conf_dot_json.screen_width_pixel) + (json_struct.conf_dot_json.screen_height_mm/json_struct.conf_dot_json.screen_height_pixel)) * 0.5;% for the OLED screen the pixels are slight asymmetric
+		GAZE_OPTS_struct.simple_pix2dva_factor = atand((GAZE_OPTS_struct.pixel_size_mm) / (GAZE_OPTS_struct.eye2screen_mm));
+		[GAZE_OPTS_struct.x_center_pix, GAZE_OPTS_struct.y_center_pix] = fn_CCF_win_to_engine_pos( 0.5, 0.5, json_struct.conf_dot_json.field_size, json_struct.conf_dot_json.target_radius, json_struct.conf_dot_json.field_x_offset, json_struct.conf_dot_json.field_y_offset);
+	end
+
 	% the jsonl files
 	for i_jsonl_FQN = 1 : length(jsonl_dir_struct)
 		cur_jsonl_name = jsonl_dir_struct(i_jsonl_FQN).name;
@@ -314,8 +380,8 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			switch cur_jsonl_name_sanitized
 				case 'pupillabs_data_dot_jsonl'
 					% fix up the timestamps for all subtables
-					request_list = {'fix_timestamps', 'apply_registration', 'convert_reg_norm_pos_to_eventide_pixel_pos'};
-					jsonl_struct.(cur_jsonl_name_sanitized) = fn_amend_pupillabs_data(jsonl_struct.(cur_jsonl_name_sanitized), cur_CCF_runfolder_FQN, json_struct.conf_dot_json, sessionID_struct, request_list);
+					request_list = {'fix_timestamps', 'apply_registration', 'convert_reg_norm_pos_to_eventide_pixel_pos', 'convert_to_DVA', 'calculate_binocular_gaze_data'};
+					jsonl_struct.(cur_jsonl_name_sanitized) = fn_amend_pupillabs_data(jsonl_struct.(cur_jsonl_name_sanitized), cur_CCF_runfolder_FQN, json_struct.conf_dot_json, sessionID_struct, request_list, GAZE_OPTS_struct);
 			end
 
 		else
@@ -460,12 +526,13 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		'calc_and_store_distances_to_targets', ...
 		'add_per_target_changed_pos_col', ...
 		...'detect_agent_fixations', 'detect_aim_fixations', 'detect_eye_fixations', ...	% needs fixing
+		'calc_and_store_gaze_distance_to_face_region', ...
 		};
 
 		max_dispersion_threshold = json_struct.conf_dot_json.target_radius/2; % potentially define this in millimeter?
 		min_fixation_duration_threshold_ms = 100; 
 		tic
-		[record2D_table, fixations_struct] = fn_amend_record2D_table(record2D_table, json_struct.conf_dot_json, request_list, max_dispersion_threshold, min_fixation_duration_threshold_ms);
+		[record2D_table, fixations_struct] = fn_amend_record2D_table(record2D_table, json_struct.conf_dot_json, request_list, max_dispersion_threshold, min_fixation_duration_threshold_ms, GAZE_OPTS_struct);
 		toc
 
 		% the number of targets in a run is not fixed, so detect it...
