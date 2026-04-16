@@ -516,7 +516,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		if (add_gaze_to_record2D_table)
 			disp([mfilename, ': INFO: requested adding gaze data to record2D_table (tick aligned calibrated gaze data)']);
 			if isfield(jsonl_struct, 'pupillabs_data_dot_jsonl')
-				record2D_table = fn_add_gaze_data_to_record2D(record2D_table, jsonl_struct.pupillabs_data_dot_jsonl, 'pupillabs',  json_struct.conf_dot_json, {'^A0_pupillabs_pupil_dot_[0|1]_dot_2d'});
+				record2D_table = fn_add_gaze_data_to_record2D(record2D_table, jsonl_struct.pupillabs_data_dot_jsonl, 'pupillabs',  json_struct.conf_dot_json, {'^A0_pupillabs_pupil_dot_[0|1]_dot_2d'}, {'synthesize_binocular_gaze_data'});
 			else
 				disp([mfilename, ': INFO: jsonl_struct does not contain pupillabs_data_dot_jsonl, skipping...']);
 			end

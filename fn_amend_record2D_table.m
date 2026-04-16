@@ -79,7 +79,7 @@ target_prefix_list = unique(target_prefix_list);
 eye_prefix_list ={};
 for i_col = 1 : length(record2D_colname_list)
 	cur_col_name = record2D_colname_list{i_col};
-	cur_eye_prefix_cell = regexp(cur_col_name, '^[A|B]_(right|left)_eye', 'match');
+	cur_eye_prefix_cell = regexp(cur_col_name, '^[A|B]_(right|left|binocular)_eye', 'match');
 	if ~isempty(cur_eye_prefix_cell)
 		eye_prefix_list = [eye_prefix_list, cur_eye_prefix_cell{1}];
 	end
@@ -186,7 +186,7 @@ if ~isempty(target_radius) && ismember({'calc_and_store_gaze_distance_to_face_re
 	face_center_y_pixel = GAZE_OPTS_struct.HP.A.y_screen_clostest2eye_pix;	% Note this is in EventIDE pixel coordinates, which are y-flipped compared to CCF's, so are gaze pixel coordinates
 
 	% check the gaze sources
-	valid_gaze_data_column_idx = contains(record2D_colname_list, regexpPattern('^[A|B]_(left|right)_eye_[X|Y]+'));
+	valid_gaze_data_column_idx = contains(record2D_colname_list, regexpPattern('^[A|B]_(left|right|binocular)_eye_[X|Y]+'));
 	valid_gaze_data_column_names = record2D_colname_list(valid_gaze_data_column_idx);
 
 	% get rid of the Y...
@@ -208,7 +208,7 @@ if ~isempty(target_radius) && ismember({'calc_and_store_gaze_distance_to_face_re
 		end
 
 		% we need this for dva
-		cur_eye_side = regexp(cur_gaze_stem, '(left|right)', 'match');
+		cur_eye_side = regexp(cur_gaze_stem, '(left|right|binocular)', 'match');
 		cur_eye_side = cur_eye_side{1};
 
 		cur_prefix = regexprep(cur_gaze_stem, '_X', '');
