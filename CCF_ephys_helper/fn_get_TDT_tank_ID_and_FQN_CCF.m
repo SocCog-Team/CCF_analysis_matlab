@@ -33,7 +33,7 @@ for i_direntry = 1 : length(proto_tank_list)
 	end
 end
 
-if ~ismempty(TDT_tank_ID)
+if ~isempty(TDT_tank_ID)
 	%TDT_tank_ID = 'SCP_DAG_04-201021-163832';
 	TDT_tank_FQN = fullfile(TDT_sess_base_dir, TDT_tank_ID);
 	%TDT_data = TDTbin2mat(TDT_tank_FQN);

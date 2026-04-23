@@ -78,6 +78,10 @@ debug = 0;
 redo_gaze_calibration = 0;
 add_gaze_to_record2D_table = 1;
 
+create_timbase_conversion_between_CCF_and_EPHYS = 1; % 0: do nothing, 1: do once, >1 force
+load_TDT_analog_in_data = 1; % try to load the analog IN data recoded on the TDT system, for reward pulses...
+REF_EPOC = 'DigitalInMessage';	% what information/method to use to find matching CCF and TDT events...
+
 
 % what threshold to use to detect up from down, with Mike Walsh's caltech
 % detector and the level output mac is ~3.3 Volts, while low is at 0 if the
@@ -128,7 +132,7 @@ if ~exist('GAZE_OPTS_struct', 'var') || isempty(GAZE_OPTS_struct)
 	GAZE_OPTS_struct.SCP_01.HP.A.y_screen_clostest2eye_pix = 341.27;
 	GAZE_OPTS_struct.SCP_01.HP.B.x_screen_intereye_pix = 960;				% the screen pixel coordinate of the eye
 	GAZE_OPTS_struct.SCP_01.HP.B.y_screen_clostest2eye_pix = 341.27;		% the screen pixel coordinate of the eye
-	GAZE_OPTS_struct.SCP_01.NHP.inter_pupillary_distance_mm = 35;			% see https://www.sciencedirect.com/science/article/pii/S0165027019301591 other reports are 25-35mm
+	GAZE_OPTS_struct.SCP_01.NHP.inter_pupillary_distance_mm = 40;			% see https://www.sciencedirect.com/science/article/pii/S0165027019301591 other reports are 25-35mm, Elmo measured 40 mm
 	GAZE_OPTS_struct.SCP_01.HP.inter_pupillary_distance_mm = 63;			% see https://en.wikipedia.org/wiki/Pupillary_distance
 	GAZE_OPTS_struct.SCP_01.x_center_pix = 960;							% the virtual gaze center in X pixels
 	GAZE_OPTS_struct.SCP_01.y_center_pix = 580;							% the virtual gaze center in Y pixels
@@ -165,7 +169,7 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 		};
 
 
-	% test 9-dot-calibration (with new jasonl format where the type is indicative of different record types that should be steered into individual subtables)
+	% test 9-dot-calibration (with new jsonl format where the type is indicative of different record types that should be steered into individual subtables)
 	%Y:\SCP_DATA\SCP-CTRL-01\CCF\foraging_task_2_NHP\SESSIONLOGS\2026\260316\20260316T132749.A_BA.B_NONE.SCP_01.sessiondir
 %	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260316', '20260316T132749.A_BA.B_NONE.SCP_01.sessiondir')};
 	% session recorded after the 9-dot-should use the same registration
@@ -202,7 +206,37 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 	% test file for merged session parsing... with pupillabs_data.jsonl
 	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', '20260319TNNNNNNM2.A_Elmo.B_MIXED.SCP_01.sessiondir')};
 
-	% use a file picker to select the desired folder
+	cur_CCF_runfolder_FQN_list = { ...
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251219', '20251219TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% re-run with correct scaling
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260204', '20260204TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% correct scaling
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260206', '20260206TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% correct scaling
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260306', '20260306TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260312', '20260312TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', '20260319TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% first session with monkey gaze data...
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260320', '20260320TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% session with gaze data, but with broken calibration data, take calibration from 260319
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260325', '20260325TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260326', '20260326TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260402', '20260402TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260403', '20260403TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260409', '20260409TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 12
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260423', '20260423TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 12
+		};
+
+	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
+
+	% % the gaze calibration sessions...
+	% cur_CCF_runfolder_FQN_list = { ...
+	% 	...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', '20260319T110006.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% first session with monkey gaze data...
+	% 	...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260320', '20260320TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% the calibration routine was broken, this session uses the calibration from 260319 instead
+	% 	...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260326', '20260326T103026.A_Elmo.B_NONE.SCP_01.sessiondir'), ...
+	% 	...%fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260326', '20260326T103026.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
+	% 	...%fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260402', '20260402T100142.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
+	% 	...%fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260403', '20260403T093508.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
+	% 	...%fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260409', '20260409T100642.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
+	% 	fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260423', '20260423T102851.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+	% 	};
+
+% use a file picker to select the desired folder
 end
 
 
@@ -227,6 +261,10 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 	session_id = extractBefore(sessionID_dir_struct.name, '.sessionID');
 	sessionID_struct = fn_parse_session_id(session_id);
+
+	% check a potential TDT tank dir
+	[TDT_tank_ID, TDT_tank_FQN, TDT_sess_base_dir] = fn_get_TDT_tank_ID_and_FQN_CCF(cur_CCF_runfolder_FQN, session_id , 'TDT');
+
 
 	% the python enums:
 	enum_struct = fn_extract_python_enums(fullfile(cur_CCF_runfolder_FQN, 'enums.py'));
@@ -286,6 +324,14 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		else
 			disp([cur_json_name, ' contained no data, skipping...']);
 		end
+	end
+
+	% is this a merged session
+	session_is_merged = 0;
+	source_session_FQN_list = [];
+	if isfield(json_struct, 'merge_manifest_dot_json') && ~isempty(json_struct.merge_manifest_dot_json)
+		session_is_merged = 1;
+		source_session_FQN_list = {json_struct.merge_manifest_dot_json.source_sessions.sessiondir_FQN};
 	end
 
 
@@ -389,6 +435,71 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		end
 	end
 
+
+	% for this we need both a TDT tank dir,as well as DO_messages.jsonl
+	if (create_timbase_conversion_between_CCF_and_EPHYS > 0) 
+		% we either need an existing tank dir or are on a merged session,
+		% in which case we need to dive into the source run folders
+		if isempty(TDT_tank_FQN) && ~session_is_merged
+			% NOTHING TO DO
+			time_conversion_session_FQN_list = {};
+		elseif (isempty(TDT_tank_FQN) && session_is_merged)
+			% need to dive into the source sessions
+			time_conversion_session_FQN_list = source_session_FQN_list;
+		elseif (~isempty(TDT_tank_FQN) && session_is_merged)
+			% all 
+			time_conversion_session_FQN_list = [source_session_FQN_list, cur_CCF_runfolder_FQN];
+		elseif (~isempty(TDT_tank_FQN) && ~session_is_merged) 
+			time_conversion_session_FQN_list = {cur_CCF_runfolder_FQN};
+		end
+
+		for i_tbc_session = 1 : length(time_conversion_session_FQN_list)
+			cur_tbc_session_dir = time_conversion_session_FQN_list{i_tbc_session};
+			cur_tbc_session_struct = fn_parse_session_id(cur_tbc_session_dir);
+			[cur_TDT_tank_ID, cur_TDT_tank_FQN, cur_TDT_sess_base_dir] = fn_get_TDT_tank_ID_and_FQN_CCF(cur_tbc_session_dir, cur_tbc_session_struct.session_id , 'TDT');
+			cur_session_dir = [extractBefore(cur_TDT_sess_base_dir, '.sessiondir'), '.sessiondir'];
+
+			cur_DO_messaged_dot_jsonl_FQN = fullfile(cur_session_dir, 'DO_messages.jsonl');
+			if ~isfile(cur_DO_messaged_dot_jsonl_FQN)
+				disp([mfilename, ': WARN: expected DO_messages.jsonl not found: ',cur_DO_messaged_dot_jsonl_FQN ]);
+				continue
+			end
+
+			if isfile([cur_DO_messaged_dot_jsonl_FQN, '.mat'])
+				cur_DO_messaged_dot_jsonl = load([cur_DO_messaged_dot_jsonl_FQN, '.mat']);
+			else
+				cur_DO_messaged_dot_jsonl = fn_parse_jsonl_file(cur_DO_messaged_dot_jsonl_FQN);
+			end
+
+			% now check whethre the timebase conversion file already exists
+			cur_time_conversion_information_FQN = fullfile(cur_TDT_tank_FQN, 'timebase_conversion_BEHAVIOUR_EPHYS.mat');
+			if (create_timbase_conversion_between_CCF_and_EPHYS > 1) || ~isfile(cur_time_conversion_information_FQN)
+				% load the TDT information (headers, epocs, and non-broadband streams)
+				narrowband_streams_mat_suffix = '.TDT_RZ2_streams.mat';
+				[TDT_header, TDT_epocs, TDT_streams] = fn_load_TDT_header_epocs_narrowband_streams_CCF(cur_TDT_tank_FQN, cur_TDT_tank_ID, narrowband_streams_mat_suffix, load_TDT_analog_in_data);
+				%TDT_recording_duration_sec = size(TDT_streams.epocs.Tick.data, 1);
+				% get all state transitions as TDT epocs, this is required for fn_match_EventIDE_and_TDT_reference_events with REF_EPOCH = DigitalInMessage
+				epocized_TDT_stat = fn_compress_TDT_stream_to_epoc_by_change_detection_CCF(TDT_streams.streams.stat);
+				TDT_epocs.epocs.DigitalInMessage = epocized_TDT_stat;
+
+				% to convert between different time bases we need events that we kno
+				% whappened at the same wall-clock time so we can automatically calculate
+				% conversion factors between the two time bases
+				[ParaState_CCF_idx, ParaState_CCF_timestamps, ParaState_TDT_idx, ParaState_TDT_timestamps] = fn_match_pythonCCF_and_TDT_reference_events_CCF(REF_EPOC, cur_DO_messaged_dot_jsonl, TDT_epocs);
+				% % calculate time conversions, avoid the first and last event...
+				[first2second_time_conversion_struct, second2first_time_conversion_struct, time_conversion_struct] = fn_translate_between_named_timebases_CCF(REF_EPOC, 'TDT', ParaState_TDT_timestamps(2:end-1), 'CCF', ParaState_CCF_timestamps(2:end-1), cur_TDT_tank_FQN);
+				time_conversion_struct.(['CCF', '_AND_', 'TDT']).CCF_session_FQN = cur_session_dir;
+				time_conversion_struct.(['CCF', '_AND_', 'TDT']).TDT_tank_FQN = cur_TDT_tank_FQN;
+				disp([mfilename, ': Saving time conversion information to: ', cur_time_conversion_information_FQN]);
+				save(cur_time_conversion_information_FQN, 'first2second_time_conversion_struct', 'second2first_time_conversion_struct', 'time_conversion_struct', 'REF_EPOC', 'ParaState_CCF_idx', 'ParaState_CCF_timestamps', 'ParaState_TDT_idx', 'ParaState_TDT_timestamps', 'cur_session_dir', 'cur_TDT_tank_FQN'); 
+				% to use this:
+				% spike_TDT_ts_list = fn_convert_time_between_named_timebases_CCF((spike_TDT_ts_list), time_conversion_struct, 'TDT', 'CCF');
+
+			else
+				disp('Timbase conversion mat file already exists and re-calculation not forced, skipping (set create_timbase_conversion_between_CCF_and_EPHYS = 2 to force re-calculation)');
+			end
+		end
+	end
 
 	% load the sessionID
 	session_id = [];
@@ -838,14 +949,24 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 	if i_runfolder == 1
 		%data_struct_list = data_struct;
-		json_struct_list = json_struct;
-		h5_struct_list = h5_struct;
-		txt_struct_list = txt_struct;
+		json_struct_list = {json_struct};
+		h5_struct_list = {h5_struct};
+		txt_struct_list = {txt_struct};
 	else
 		%data_struct_list(end+1) = data_struct;
-		json_struct_list(end+1) = json_struct;
-		h5_struct_list(end+1) = h5_struct;
-		txt_struct_list(end+1) = txt_struct;
+		json_struct_list(end+1) = {json_struct};
+		h5_struct_list(end+1) = {h5_struct};
+		txt_struct_list(end+1) = {txt_struct};
+	end
+
+	if ismember({'A_binocular_eye_dX_pixel'}, record2D_table.Properties.VariableNames)
+		% quick and dirty testing, whether vergence differs
+		%figure('Name', 'All gaze dX pixel') ; histogram(record2D_table.A_binocular_eye_dX_pixel(record2D_table.A_binocular_eye_confidence >= 0.9), (-40:0.1:60));
+		%figure('Name', 'All gaze dX CCF') ; histogram(record2D_table.A_binocular_eye_dX(record2D_table.A_binocular_eye_confidence >= 0.9)*json_struct.conf_dot_json.screen_height_mm/json_struct.conf_dot_json.screen_height_pixel, (-1:0.001:1));
+
+		figure('Name', 'All gaze dX mm') ; histogram(record2D_table.A_binocular_eye_dX_pixel(record2D_table.A_binocular_eye_confidence >= 0.9)*json_struct.conf_dot_json.screen_height_mm/json_struct.conf_dot_json.screen_height_pixel, (-40:0.1:60))
+		figure('Name', 'Gaze on face dX mm') ; histogram(record2D_table.A_binocular_eye_dX_pixel(record2D_table.A_binocular_eye_confidence >= 0.9 & record2D_table.distance_A_binocular_eye_to_facecenter <= 1/6)*json_struct.conf_dot_json.screen_height_mm/json_struct.conf_dot_json.screen_height_pixel, (-40:0.1:60))
+		figure('Name', 'Gaze not on face dX mm') ; histogram(record2D_table.A_binocular_eye_dX_pixel(record2D_table.A_binocular_eye_confidence >= 0.9 & ~(record2D_table.distance_A_binocular_eye_to_facecenter <= 1/6))*json_struct.conf_dot_json.screen_height_mm/json_struct.conf_dot_json.screen_height_pixel, (-40:0.1:60))
 	end
 
 end
@@ -859,6 +980,8 @@ disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end), ' seconds.']);
 disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end / 60), ' minutes.']);
 %disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end / (60 * 60)), ' hours.']);
 %disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end / (60 * 60 * 24)), ' days. Done...']);
+
+
 
 
 end
