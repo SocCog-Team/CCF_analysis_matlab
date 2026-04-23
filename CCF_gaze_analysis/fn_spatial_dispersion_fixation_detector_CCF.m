@@ -81,7 +81,9 @@ for iTrial = 1:nTrial
 					% 	break
 				% 	end
 				% end
-
+				% TODO replace by calculating the duration from the
+				% timestamp vector instead to allow for non-uniformly
+				% spaced sampling (as produced by e.g. pupillabs)
 				if ((length(fixIndices) * sample_period) >= min_fixation_duration_threshold_ms)
 					nFix = nFix + 1;
 					%fixation time is sum of all times
