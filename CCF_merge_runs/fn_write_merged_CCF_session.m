@@ -100,6 +100,22 @@ if isfield(merged_data_struct, 'conf') && ~isempty(merged_data_struct.conf)
 end
 
 
+% ===== merged_conf.jsonl =====
+if isfield(merged_data_struct, 'conf_list') && ~isempty(merged_data_struct.conf_list)
+	conf_jsonl_FQN = fullfile(output_dir_FQN, 'merged_conf.jsonl');
+	fid = fopen(conf_jsonl_FQN, 'w');
+	if fid == -1
+		error([mfilename, ': could not open for writing: ', conf_jsonl_FQN]);
+	end
+	for i_conf = 1 : length(merged_data_struct.conf_list)
+		fprintf(fid, '%s\n', jsonencode(merged_data_struct.conf_list{i_conf}));
+	end
+	fclose(fid);
+	disp([mfilename, ': wrote merged_conf.jsonl (', ...
+		num2str(length(merged_data_struct.conf_list)), ' entries)']);
+end
+
+
 % ===== enums.py =====
 if isfield(merged_data_struct, 'enums_text') && ~isempty(merged_data_struct.enums_text)
 	fid = fopen(fullfile(output_dir_FQN, 'enums.py'), 'w');
