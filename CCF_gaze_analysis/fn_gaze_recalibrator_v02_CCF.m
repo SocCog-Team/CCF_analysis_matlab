@@ -88,7 +88,7 @@ if ~exist('acceptable_radius_pix', 'var') || isempty(acceptable_radius_pix)
 			acceptable_radius_pix = 10;
 		case 'pupillabs'
 			acceptable_radius_pix = 20;	% TODO needes fixing
-			acceptable_radius_pix = 20 / CCF_conf.field_width_pixel;	% TODO needes fixing
+			acceptable_radius_pix = 10 / CCF_conf.field_width_pixel;	% TODO needes fixing
 			
 	end
 end
