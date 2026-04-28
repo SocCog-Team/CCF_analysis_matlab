@@ -219,12 +219,13 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260402', '20260402TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...
 		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260403', '20260403TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...
 		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260409', '20260409TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 12
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260423', '20260423TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 12
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260423', '20260423TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 13
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260424', '20260424TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 14
 		};
 
 	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
 
-	% % the gaze calibration sessions...
+	% % % the gaze calibration sessions...
 	% cur_CCF_runfolder_FQN_list = { ...
 	% 	...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', '20260319T110006.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% first session with monkey gaze data...
 	% 	...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260320', '20260320TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% the calibration routine was broken, this session uses the calibration from 260319 instead
@@ -233,7 +234,9 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 	% 	...%fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260402', '20260402T100142.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
 	% 	...%fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260403', '20260403T093508.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
 	% 	...%fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260409', '20260409T100642.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
-	% 	fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260423', '20260423T102851.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+	% 	...%fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260423', '20260423T102851.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+	% 	...%fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260424', '20260424T101945.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+	% 	fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260428', '20260428T102602.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
 	% 	};
 
 % use a file picker to select the desired folder
@@ -459,21 +462,26 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			[cur_TDT_tank_ID, cur_TDT_tank_FQN, cur_TDT_sess_base_dir] = fn_get_TDT_tank_ID_and_FQN_CCF(cur_tbc_session_dir, cur_tbc_session_struct.session_id , 'TDT');
 			cur_session_dir = [extractBefore(cur_TDT_sess_base_dir, '.sessiondir'), '.sessiondir'];
 
-			cur_DO_messaged_dot_jsonl_FQN = fullfile(cur_session_dir, 'DO_messages.jsonl');
-			if ~isfile(cur_DO_messaged_dot_jsonl_FQN)
-				disp([mfilename, ': WARN: expected DO_messages.jsonl not found: ',cur_DO_messaged_dot_jsonl_FQN ]);
+			cur_DO_messages_dot_jsonl_FQN = fullfile(cur_session_dir, 'DO_messages.jsonl');
+			if ~isfile(cur_DO_messages_dot_jsonl_FQN)
+				disp([mfilename, ': WARN: expected DO_messages.jsonl not found: ',cur_DO_messages_dot_jsonl_FQN ]);
 				continue
 			end
 
-			if isfile([cur_DO_messaged_dot_jsonl_FQN, '.mat'])
-				cur_DO_messaged_dot_jsonl = load([cur_DO_messaged_dot_jsonl_FQN, '.mat']);
-			else
-				cur_DO_messaged_dot_jsonl = fn_parse_jsonl_file(cur_DO_messaged_dot_jsonl_FQN);
-			end
 
 			% now check whethre the timebase conversion file already exists
 			cur_time_conversion_information_FQN = fullfile(cur_TDT_tank_FQN, 'timebase_conversion_BEHAVIOUR_EPHYS.mat');
 			if (create_timbase_conversion_between_CCF_and_EPHYS > 1) || ~isfile(cur_time_conversion_information_FQN)
+				% even just loading costs time so only handle
+				% cur_DO_messages_dot_jsonl_FQN if we actually want/need to
+				% create timebase_conversion_BEHAVIOUR_EPHYS
+				if isfile([cur_DO_messages_dot_jsonl_FQN, '.mat'])
+					cur_DO_messages_dot_jsonl = load([cur_DO_messages_dot_jsonl_FQN, '.mat'], 'cur_parsed_jsonl');
+					cur_DO_messages_dot_jsonl = cur_DO_messages_dot_jsonl.cur_parsed_jsonl;
+				else
+					cur_DO_messages_dot_jsonl = fn_parse_jsonl_file(cur_DO_messages_dot_jsonl_FQN);
+				end
+
 				% load the TDT information (headers, epocs, and non-broadband streams)
 				narrowband_streams_mat_suffix = '.TDT_RZ2_streams.mat';
 				[TDT_header, TDT_epocs, TDT_streams] = fn_load_TDT_header_epocs_narrowband_streams_CCF(cur_TDT_tank_FQN, cur_TDT_tank_ID, narrowband_streams_mat_suffix, load_TDT_analog_in_data);
@@ -485,7 +493,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 				% to convert between different time bases we need events that we kno
 				% whappened at the same wall-clock time so we can automatically calculate
 				% conversion factors between the two time bases
-				[ParaState_CCF_idx, ParaState_CCF_timestamps, ParaState_TDT_idx, ParaState_TDT_timestamps] = fn_match_pythonCCF_and_TDT_reference_events_CCF(REF_EPOC, cur_DO_messaged_dot_jsonl, TDT_epocs);
+				[ParaState_CCF_idx, ParaState_CCF_timestamps, ParaState_TDT_idx, ParaState_TDT_timestamps] = fn_match_pythonCCF_and_TDT_reference_events_CCF(REF_EPOC, cur_DO_messages_dot_jsonl, TDT_epocs);
 				% % calculate time conversions, avoid the first and last event...
 				[first2second_time_conversion_struct, second2first_time_conversion_struct, time_conversion_struct] = fn_translate_between_named_timebases_CCF(REF_EPOC, 'TDT', ParaState_TDT_timestamps(2:end-1), 'CCF', ParaState_CCF_timestamps(2:end-1), cur_TDT_tank_FQN);
 				time_conversion_struct.(['CCF', '_AND_', 'TDT']).CCF_session_FQN = cur_session_dir;
