@@ -65,6 +65,11 @@ catch ME
 				if (debug)
 					disp(['Line: ', num2str(count)]);
 				end
+
+				% if (count == 1004334)
+				% 	disp('Doh...'); % 20260424 J has issues...
+				% end
+				prev_line = cur_line;
 				cur_line = fgetl(cur_jsonl_fd);
 				% if count == 1129
 				% 	disp('Doh...')
@@ -76,6 +81,12 @@ catch ME
 				% we want these to lineup well 
 				if isfield(cur_decoded_struct, 'norm_pos')
 					cur_decoded_struct.norm_pos = cur_decoded_struct.norm_pos';
+				end
+
+				% these can appear soiriously depending on interaction with
+				% thr running pupillabs collection...
+				if isfield(cur_decoded_struct, 'debug_info')
+					cur_decoded_struct = rmfield(cur_decoded_struct, 'debug_info');
 				end
 
 				cur_type_string = cur_decoded_struct.type;
@@ -99,9 +110,11 @@ catch ME
 			end
 		catch ME2
 			ME2
+			disp([mfilename, ': ERROR: likely non matching structures, compare cur_decoded_struct with decoded_struct.(cur_subtable_name)(end)']);	
+			keyboard;
 		end
 	else
-		disp(['Encountered unexpected exception: ']);
+		disp('Encountered unexpected exception: ');
 		ME
 	end
 end
