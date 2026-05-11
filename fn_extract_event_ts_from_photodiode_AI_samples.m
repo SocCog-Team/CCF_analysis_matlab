@@ -82,7 +82,7 @@ onset_offset_events_struct.pd_onset_sample_timestamp_list = pd_onset_sample_time
 onset_offset_events_struct.pd_offset_sample_timestamp_list = pd_offset_sample_timestamp_list;
 pd_puls_dur_list = pd_offset_sample_timestamp_list - pd_onset_sample_timestamp_list;
 
-% if we start witin a pulse this would be wonky...
+% if we start within a pulse this would be wonky...
 if pd_puls_dur_list(1) < 0
 	error('Sampling started during PDD on epoch/pulse, not handled yet');
 end
@@ -203,7 +203,7 @@ for i_pulse = 1 : length(pd_inter_pulse_dur_s_list)
 		pd_block_onset_s_list(block_counter + 1) = pd_onset_sample_timestamp_list(i_pulse + 1);
 		pd_block_offset_s_list(block_counter) = pd_offset_sample_timestamp_list(i_pulse);
 
-		% these should well be witih an collection period
+		% these should well be witin an collection period
 		pd_block_onset_collection_num_list(block_counter) = collection_per_sample_list(find(analog_signal_timestamp_list == pd_block_onset_s_list(block_counter)));
 
 		% but these suffer from the stimulation running on its own clock,
