@@ -34,7 +34,7 @@ verbose = 0;
 % we only have single trials...
 nTrial = length(data_struct_of_arr);
 % todo add start and end indices...
-fixation = repmat(struct('TrialNumber', [], 'TimeStamp', [], 'mean_X', [], 'mean_Y', [], 'mean_ABDepthPix', [], 'onset_timestamp_ms', [], 'fix_onset_idx', [], 'end_timestamp_ms', [], 'fix_end_idx', [], 'duration_ms', [], 'per_sample_fixID', []), 1, nTrial);
+fixation = repmat(struct('TrialNumber', [], 'TimeStamp', [], 'mean_X', [], 'mean_Y', [], 'mean_depth_dX', [], 'onset_timestamp_ms', [], 'fix_onset_idx', [], 'end_timestamp_ms', [], 'fix_end_idx', [], 'duration_ms', [], 'per_sample_fixID', []), 1, nTrial);
 if (isDraw)
 	nTrialCol = floor(sqrt(2*nTrial));
 	nTrialRow = ceil(nTrial/nTrialCol);
@@ -107,8 +107,8 @@ for iTrial = 1:nTrial
 					%fixation(iTrial).Y(nFix) = dot(data_struct_of_arr(iTrial).Y(fixIndices), data_struct_of_arr(iTrial).timestamp(fixIndices))/fixation(iTrial).t(nFix);
 					fixation(iTrial).mean_X(nFix) = mean(data_struct_of_arr(iTrial).X(fixIndices), 'omitnan');
 					fixation(iTrial).mean_Y(nFix) = mean(data_struct_of_arr(iTrial).Y(fixIndices), 'omitnan');
-					if isfield(data_struct_of_arr, 'ABDepthPix')
-						fixation(iTrial).mean_ABDepthPix(nFix) = mean(data_struct_of_arr(iTrial).ABDepthPix(fixIndices), 'omitnan');
+					if isfield(data_struct_of_arr, 'depth_dX')
+						fixation(iTrial).mean_depth_dX(nFix) = mean(data_struct_of_arr(iTrial).depth_dX(fixIndices), 'omitnan');
 					end
 					fixation(iTrial).per_sample_fixID(fixIndices) = nFix;
 					%SM move later
@@ -162,8 +162,8 @@ for iTrial = 1:nTrial
 			%fixation(iTrial).Y(nFix) = dot(data_struct_of_arr(iTrial).Y(fixIndices), data_struct_of_arr(iTrial).timestamp(fixIndices))/fixation(iTrial).t(nFix);
 			fixation(iTrial).mean_X(nFix) = mean(data_struct_of_arr(iTrial).X(fixIndices), 'omitnan');
 			fixation(iTrial).mean_Y(nFix) = mean(data_struct_of_arr(iTrial).Y(fixIndices), 'omitnan');
-			if isfield(data_struct_of_arr, 'ABDepthPix')
-				fixation(iTrial).mean_ABDepthPix(nFix) = mean(data_struct_of_arr(iTrial).ABDepthPix(fixIndices), 'omitnan');
+			if isfield(data_struct_of_arr, 'depth_dX')
+				fixation(iTrial).mean_depth_dX(nFix) = mean(data_struct_of_arr(iTrial).depth_dX(fixIndices), 'omitnan');
 			end
 			fixation(iTrial).per_sample_fixID(fixIndices) = nFix;
 		else
