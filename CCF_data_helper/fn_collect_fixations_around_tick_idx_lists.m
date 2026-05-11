@@ -49,9 +49,14 @@ if ~isempty(fixations_struct)
 				case {'aims1', 'agent1'}
 					out_cur_fix_source_name = ['B_', cur_fix_source_name(1:end-1)];
 				otherwise
-					error([mfilename, ': unknown cur_fix_source_name: ', cur_fix_source_name, ', can not prefix the side string.']);
+					if contains(cur_fix_source_name, regexpPattern('^A_'))
+						% already side-prefixed
+					elseif contains(cur_fix_source_name, regexpPattern('^B_'))
+						% already side-prefixed
+					else
+						error([mfilename, ': unknown cur_fix_source_name: ', cur_fix_source_name, ', can not prefix the side string.']);
+					end
 			end
-
 
 			[prev_fix_onset_idx, prev_fix_end_idx, prev_fix_mean_XY, cur_fix_onset_idx, cur_fix_end_idx, cur_fix_mean_XY, next_fix_onset_idx, next_fix_end_idx, next_fix_mean_XY] = fn_collect_fixation_data_around_tick(fixations_struct.(cur_fix_source_name), cur_state_change_tick_idx_list);
 
