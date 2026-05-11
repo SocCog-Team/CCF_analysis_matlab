@@ -70,7 +70,7 @@ for iTrial = 1:nTrial
 				
 				fixIndices = fixWindowStart:fixWindowEnd-1;	% the last value pushed us over the dispersion threshold...
 				% remove trailling NaNs here, but critically allow internal NaN stretches, either for individual rejected noisy samples or for blinks that do not change the fixation
-				 [ fixIndices ] = fn_curate_fixation_indices(fixIndices, NaN_masked_data);
+				[ fixIndices ] = fn_curate_fixation_indices(fixIndices, NaN_masked_data);
 				% for i_fixSample = length(fixIndices):-1:1
 				% 	if isnan(data_struct_of_arr(iTrial).X(fixIndices(i_fixSample)))
 					% 	% keep going...
@@ -84,14 +84,18 @@ for iTrial = 1:nTrial
 				% TODO replace by calculating the duration from the
 				% timestamp vector instead to allow for non-uniformly
 				% spaced sampling (as produced by e.g. pupillabs)
-				if ((length(fixIndices) * sample_period) >= min_fixation_duration_threshold_ms)
+				cur_fix_duration_ms = data_struct_of_arr(iTrial).timestamp(fixIndices(end)) - data_struct_of_arr(iTrial).timestamp(fixIndices(1));
+				%if ((length(fixIndices) * sample_period) >= min_fixation_duration_threshold_ms)
+				if (cur_fix_duration_ms >= min_fixation_duration_threshold_ms)
 					nFix = nFix + 1;
 					%fixation time is sum of all times
 					%fixation(iTrial).t(nFix) =
 					%sum(data_struct_of_arr(iTrial).timestamp(fixIndices)); %thiswill not work
 					fixation(iTrial).TrialNumber(nFix) = iTrial;
 					fixation(iTrial).TimeStamp(nFix) = data_struct_of_arr(iTrial).timestamp(fixIndices(1));
-					fixation(iTrial).duration_ms(nFix) = length(fixIndices) * sample_period;
+					%fixation(iTrial).duration_ms(nFix) = length(fixIndices) * sample_period;
+					%fixation(iTrial).duration_ms(nFix) = data_struct_of_arr(iTrial).timestamp(fixIndices(end)) - data_struct_of_arr(iTrial).timestamp(fixIndices(1));
+					fixation(iTrial).duration_ms(nFix) = cur_fix_duration_ms;
 					fixation(iTrial).onset_timestamp_ms(nFix) = data_struct_of_arr(iTrial).timestamp(fixIndices(1));
 					fixation(iTrial).fix_onset_idx(nFix) = fixIndices(1);
 					fixation(iTrial).end_timestamp_ms(nFix) = data_struct_of_arr(iTrial).timestamp(fixIndices(end));
@@ -135,13 +139,18 @@ for iTrial = 1:nTrial
 		% remove trailling NaNs here, but critically allow internal NaN stretches, either for individual rejected noisy samples or for blinks that do not change the fixation
 		[ fixIndices ] = fn_curate_fixation_indices(fixIndices, NaN_masked_data);
 
-		if ((length(fixIndices) * sample_period) >= min_fixation_duration_threshold_ms)
+		cur_fix_duration_ms = data_struct_of_arr(iTrial).timestamp(fixIndices(end)) - data_struct_of_arr(iTrial).timestamp(fixIndices(1));
+
+		%if ((length(fixIndices) * sample_period) >= min_fixation_duration_threshold_ms)
+		if (cur_fix_duration_ms >= min_fixation_duration_threshold_ms)
 			nFix = nFix + 1;
 			%fixation time is sum of all times
 			%fixation(iTrial).t(nFix) = sum(data_struct_of_arr(iTrial).timestamp(fixIndices));
 			fixation(iTrial).TrialNumber(nFix) = iTrial;
 			fixation(iTrial).TimeStamp(nFix) = data_struct_of_arr(iTrial).timestamp(fixIndices(1));
-			fixation(iTrial).duration_ms(nFix) = length(fixIndices) * sample_period;
+			%fixation(iTrial).duration_ms(nFix) = length(fixIndices) * sample_period;
+			%fixation(iTrial).duration_ms(nFix) = data_struct_of_arr(iTrial).timestamp(fixIndices(end)) - data_struct_of_arr(iTrial).timestamp(fixIndices(1));
+			fixation(iTrial).duration_ms(nFix) = cur_fix_duration_ms;
 			fixation(iTrial).onset_timestamp_ms(nFix) = data_struct_of_arr(iTrial).timestamp(fixIndices(1));
 			fixation(iTrial).fix_onset_idx(nFix) = fixIndices(1);
 			fixation(iTrial).end_timestamp_ms(nFix) = data_struct_of_arr(iTrial).timestamp(fixIndices(end));
