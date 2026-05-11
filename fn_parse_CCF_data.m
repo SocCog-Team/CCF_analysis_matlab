@@ -77,6 +77,7 @@ debug = 0;
 
 redo_gaze_calibration = 0;
 add_gaze_to_record2D_table = 1;
+redo_record2D_amendments = 0;
 
 create_timbase_conversion_between_CCF_and_EPHYS = 1; % 0: do nothing, 1: do once, >1 force
 load_TDT_analog_in_data = 1; % try to load the analog IN data recoded on the TDT system, for reward pulses...
@@ -99,13 +100,18 @@ if ~exist('GAZE_OPTS_struct', 'var') || isempty(GAZE_OPTS_struct)
 	%GAZE_OPTS_struct.GAZE_data_prefix = 'BINOCCULAR_RAW_resampled_registered_';	% which data to operate on RIGHT_EYE_RAW_resampled_registered_, LEFT_EYE_RAW_resampled_registered_
 	GAZE_OPTS_struct.SCP_01.fixation_detection_method = 'iDT';	% % following Salvucci, Goldberg (2000), only iDT implemented yet (PETH data are already iVT processed with coarse limt of 50 DVA(second
 	GAZE_OPTS_struct.SCP_01.show_fixation_detection = 0;		% show the detected fixations
-	GAZE_OPTS_struct.SCP_01.iDT.max_dispersion_threshold_pixel = 20;	% how much dispersion will we accept, iin pixel
-	GAZE_OPTS_struct.SCP_01.iDT.max_dispersion_threshold_dva = 2.0;	% how much dispersion will we accept, in DVA, diameter of a gaze permission disc
+	GAZE_OPTS_struct.SCP_01.iDT.max_dispersion_threshold_dva = 1.5;		% how much dispersion will we accept, in DVA, diameter of a gaze permission disc, this has priority over pixel and CCF
+	GAZE_OPTS_struct.SCP_01.iDT.max_dispersion_threshold_pixel = 20;	% how much dispersion will we accept, iin pixel, this has priority over CCF
+	GAZE_OPTS_struct.SCP_01.iDT.max_dispersion_threshold_CCF = 0.05;	% how much dispersion will we accept, in relative CCF space
 
-	GAZE_OPTS_struct.SCP_01.iDT.min_duration_threshold_ms = 80;	% how long does a proto fixation need to last to be considered a true fixation?
+	GAZE_OPTS_struct.SCP_01.iDT.min_duration_threshold_ms = 90;	% how long does a proto fixation need to last to be considered a true fixation?
 	GAZE_OPTS_struct.SCP_01.eye2screen_mm = 350;% for NHP 35cm
 	GAZE_OPTS_struct.SCP_01.pixel_size_mm = ((1209.4/1920) + (680.4/1080)) * 0.5;% for the OLED screen the pixels are slight asymmetric
 	GAZE_OPTS_struct.SCP_01.simple_pix2dva_factor = atand((GAZE_OPTS_struct.SCP_01.pixel_size_mm) / (GAZE_OPTS_struct.SCP_01.eye2screen_mm));
+	GAZE_OPTS_struct.SCP_01.gaze_unit_suffix_string = '_dva'; % what gaze source to use for fixation detection, CCF relative space: ''; EventIDE pixel space: '_pixel'; calibrated degree visual angle space: '_dva';	% will fall back to CCF space
+	GAZE_OPTS_struct.SCP_01.gaze_selection_col_suffix_string = '_confidence';
+	GAZE_OPTS_struct.SCP_01.gaze_selection_min_threshold_value = 0.85;
+	GAZE_OPTS_struct.SCP_01.gaze_selection_max_threshold_value = [];
 
 	%GAZE_OPTS_struct.last_pre_event_fix.require_straddling_event = 1;	% this is needed to clean up the pre_event window, so we require the pre_event fixation to span o/over the respective event
 	%GAZE_OPTS_struct.last_pre_event_fix.min_pre_event_offset_ms = -50;	% for the pre event fixation, how close to the event the fixation needs to end
@@ -221,23 +227,34 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260409', '20260409TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 12
 		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260423', '20260423TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 13
 		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260424', '20260424TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 14
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260428', '20260428TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 14
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260429', '20260429TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 14
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260430', '20260430TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 14
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260501', '20260501TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 14
 		};
 
-	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
+	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
+	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(6:end); % clear up to 7
 
-	% % % the gaze calibration sessions...
-	% cur_CCF_runfolder_FQN_list = { ...
-	% 	...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', '20260319T110006.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% first session with monkey gaze data...
-	% 	...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260320', '20260320TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% the calibration routine was broken, this session uses the calibration from 260319 instead
-	% 	...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260326', '20260326T103026.A_Elmo.B_NONE.SCP_01.sessiondir'), ...
-	% 	...%fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260326', '20260326T103026.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
-	% 	...%fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260402', '20260402T100142.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
-	% 	...%fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260403', '20260403T093508.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
-	% 	...%fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260409', '20260409T100642.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
-	% 	...%fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260423', '20260423T102851.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
-	% 	...%fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260424', '20260424T101945.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
-	% 	fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260428', '20260428T102602.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
-	% 	};
+	only_process_gaze_calibration = 0;
+	if (only_process_gaze_calibration)
+	% the gaze calibration sessions...
+	cur_CCF_runfolder_FQN_list = { ...
+		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', '20260319T110006.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% first session with monkey gaze data...
+		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260320', '20260320TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% the calibration routine was broken, this session uses the calibration from 260319 instead
+		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260326', '20260326T103026.A_Elmo.B_NONE.SCP_01.sessiondir'), ...
+		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260326', '20260326T103026.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
+		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260402', '20260402T100142.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
+		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260403', '20260403T093508.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
+		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260409', '20260409T100642.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
+		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260423', '20260423T102851.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260424', '20260424T101945.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260428', '20260428T102602.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260429', '20260429T100042.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13	
+		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260430', '20260430T090028.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13	
+		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260501', '20260501T085455.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13	
+		};
+	end
 
 % use a file picker to select the desired folder
 end
@@ -494,15 +511,24 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 				% whappened at the same wall-clock time so we can automatically calculate
 				% conversion factors between the two time bases
 				[ParaState_CCF_idx, ParaState_CCF_timestamps, ParaState_TDT_idx, ParaState_TDT_timestamps] = fn_match_pythonCCF_and_TDT_reference_events_CCF(REF_EPOC, cur_DO_messages_dot_jsonl, TDT_epocs);
-				% % calculate time conversions, avoid the first and last event...
-				[first2second_time_conversion_struct, second2first_time_conversion_struct, time_conversion_struct] = fn_translate_between_named_timebases_CCF(REF_EPOC, 'TDT', ParaState_TDT_timestamps(2:end-1), 'CCF', ParaState_CCF_timestamps(2:end-1), cur_TDT_tank_FQN);
-				time_conversion_struct.(['CCF', '_AND_', 'TDT']).CCF_session_FQN = cur_session_dir;
-				time_conversion_struct.(['CCF', '_AND_', 'TDT']).TDT_tank_FQN = cur_TDT_tank_FQN;
-				disp([mfilename, ': Saving time conversion information to: ', cur_time_conversion_information_FQN]);
-				save(cur_time_conversion_information_FQN, 'first2second_time_conversion_struct', 'second2first_time_conversion_struct', 'time_conversion_struct', 'REF_EPOC', 'ParaState_CCF_idx', 'ParaState_CCF_timestamps', 'ParaState_TDT_idx', 'ParaState_TDT_timestamps', 'cur_session_dir', 'cur_TDT_tank_FQN'); 
-				% to use this:
-				% spike_TDT_ts_list = fn_convert_time_between_named_timebases_CCF((spike_TDT_ts_list), time_conversion_struct, 'TDT', 'CCF');
-
+				if (length(ParaState_CCF_idx) > 1)
+					% % calculate time conversions, avoid the first and last event...
+					if (length(ParaState_CCF_idx) > 10) && (length(ParaState_TDT_idx) > 10)
+						[first2second_time_conversion_struct, second2first_time_conversion_struct, time_conversion_struct] = fn_translate_between_named_timebases_CCF(REF_EPOC, 'TDT', ParaState_TDT_timestamps(2:end-1), 'CCF', ParaState_CCF_timestamps(2:end-1), cur_TDT_tank_FQN);
+					else
+						% if less than 10 events, use all
+						disp([mfilename, ': INFO: less than 10 events, using all for matching...']);
+						[first2second_time_conversion_struct, second2first_time_conversion_struct, time_conversion_struct] = fn_translate_between_named_timebases_CCF(REF_EPOC, 'TDT', ParaState_TDT_timestamps(1:end), 'CCF', ParaState_CCF_timestamps(1:end), cur_TDT_tank_FQN);
+					end
+					time_conversion_struct.(['CCF', '_AND_', 'TDT']).CCF_session_FQN = cur_session_dir;
+					time_conversion_struct.(['CCF', '_AND_', 'TDT']).TDT_tank_FQN = cur_TDT_tank_FQN;
+					disp([mfilename, ': Saving time conversion information to: ', cur_time_conversion_information_FQN]);
+					save(cur_time_conversion_information_FQN, 'first2second_time_conversion_struct', 'second2first_time_conversion_struct', 'time_conversion_struct', 'REF_EPOC', 'ParaState_CCF_idx', 'ParaState_CCF_timestamps', 'ParaState_TDT_idx', 'ParaState_TDT_timestamps', 'cur_session_dir', 'cur_TDT_tank_FQN');
+					% to use this:
+					% spike_TDT_ts_list = fn_convert_time_between_named_timebases_CCF((spike_TDT_ts_list), time_conversion_struct, 'TDT', 'CCF');
+				else
+					disp([mfilename, ': WARN: less than two common events, timebase conversion impossible, skipping...']);
+				end
 			else
 				disp('Timbase conversion mat file already exists and re-calculation not forced, skipping (set create_timbase_conversion_between_CCF_and_EPHYS = 2 to force re-calculation)');
 			end
@@ -621,38 +647,72 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	
 	% record2D
 	if ~isempty(h5_struct) && ismember({'record2D_data'}, fieldnames(h5_struct))
-		% create a proper header for the data and reshape to 2D table...
-		record2D_struct.header = json_struct.record2D_header_dot_json.record2D_column_names';
-		record2D_struct.table = squeeze(h5_struct.record2D_data)';
-		record2D_table = array2table(record2D_struct.table, 'VariableNames', record2D_struct.header);
-
-		%% seem to match...
-		%corrected_record2D_struct.header = json_struct.corrected_record2D_header_dot_json.record2D_column_names';
-		%corrected_record2D_struct.table = squeeze(h5_struct.corrected_record2D_data)';
-		%corrected_record2D_table = array2table(corrected_record2D_struct.table, 'VariableNames', corrected_record2D_struct.header);
+		% TODO: cache this as mat file as processing is quite costly...
 
 
-		if (add_gaze_to_record2D_table)
-			disp([mfilename, ': INFO: requested adding gaze data to record2D_table (tick aligned calibrated gaze data)']);
-			if isfield(jsonl_struct, 'pupillabs_data_dot_jsonl')
-				record2D_table = fn_add_gaze_data_to_record2D(record2D_table, jsonl_struct.pupillabs_data_dot_jsonl, 'pupillabs',  json_struct.conf_dot_json, {'^A0_pupillabs_pupil_dot_[0|1]_dot_2d'}, {'synthesize_binocular_gaze_data'});
-			else
-				disp([mfilename, ': INFO: jsonl_struct does not contain pupillabs_data_dot_jsonl, skipping...']);
-			end
-		end
+		gaze_data_source_regexp_list = {'^A0_pupillabs_pupil_dot_[0|1]_dot_2d'};
+		fn_add_gaze_data_to_record2D_request_list = {'synthesize_binocular_gaze_data'};
 
-		request_list = {'nan_out_invalid_aims_pos', 'nan_out_invalid_agent_pos', ...
+
+		fn_amend_record2D_table_request_list = {'nan_out_invalid_aims_pos', 'nan_out_invalid_agent_pos', ...
 		'calc_and_store_distances_to_targets', ...
 		'add_per_target_changed_pos_col', ...
-		...'detect_agent_fixations', 'detect_aim_fixations', 'detect_eye_fixations', ...	% needs fixing
+		...'detect_agent_fixations', 'detect_aim_fixations', ...
+		'detect_eye_fixations', ...	% needs fixing
 		'calc_and_store_gaze_distance_to_face_region', ...
 		};
-
 		max_dispersion_threshold = json_struct.conf_dot_json.target_radius/2; % potentially define this in millimeter?
 		min_fixation_duration_threshold_ms = 100; 
-		tic
-		[record2D_table, fixations_struct] = fn_amend_record2D_table(record2D_table, json_struct.conf_dot_json, request_list, max_dispersion_threshold, min_fixation_duration_threshold_ms, GAZE_OPTS_struct);
-		toc
+
+
+		record2D_subhash_list = { DataHash(gaze_data_source_regexp_list), ...
+			DataHash(fn_add_gaze_data_to_record2D_request_list), ...
+			DataHash(fn_amend_record2D_table_request_list), ...
+			DataHash(max_dispersion_threshold), ...
+			DataHash(min_fixation_duration_threshold_ms), ...
+			DataHash(GAZE_OPTS_struct), ...
+		};
+
+		record2D_hash = DataHash(record2D_subhash_list);
+		
+
+		record2D_cache_FQN = fullfile(h5_dir_struct(1).folder, ['record2D_cache_', record2D_hash, '.mat']);
+
+		if isfile(record2D_cache_FQN) && ~(redo_record2D_amendments)
+			% load this
+			disp([mfilename, ': INFO: loading record2D_table and fixations_struct from cache: ', record2D_cache_FQN]);
+			load(fixations_struct_cache_FQN);
+		else
+
+			% create a proper header for the data and reshape to 2D table...
+			record2D_struct.header = json_struct.record2D_header_dot_json.record2D_column_names';
+			record2D_struct.table = squeeze(h5_struct.record2D_data)';
+			record2D_table = array2table(record2D_struct.table, 'VariableNames', record2D_struct.header);
+
+			%% seem to match...
+			%corrected_record2D_struct.header = json_struct.corrected_record2D_header_dot_json.record2D_column_names';
+			%corrected_record2D_struct.table = squeeze(h5_struct.corrected_record2D_data)';
+			%corrected_record2D_table = array2table(corrected_record2D_struct.table, 'VariableNames', corrected_record2D_struct.header);
+
+
+			if (add_gaze_to_record2D_table)
+				disp([mfilename, ': INFO: requested adding gaze data to record2D_table (tick aligned calibrated gaze data)']);
+				if isfield(jsonl_struct, 'pupillabs_data_dot_jsonl')
+					record2D_table = fn_add_gaze_data_to_record2D(record2D_table, jsonl_struct.pupillabs_data_dot_jsonl, 'pupillabs',  json_struct.conf_dot_json, gaze_data_source_regexp_list, fn_add_gaze_data_to_record2D_request_list);
+				else
+					disp([mfilename, ': INFO: jsonl_struct does not contain pupillabs_data_dot_jsonl, skipping...']);
+				end
+			end
+
+			tic
+			[record2D_table, fixations_struct] = fn_amend_record2D_table(record2D_table, json_struct.conf_dot_json, fn_amend_record2D_table_request_list, max_dispersion_threshold, min_fixation_duration_threshold_ms, GAZE_OPTS_struct);
+			toc
+
+			%  save this
+			disp([mfilename, ': INFO: saving record2D_table and fixations_struct as cache: ', record2D_cache_FQN]);
+			save(record2D_cache_FQN, 'record2D_table', 'fixations_struct');
+		end
+
 
 		% the number of targets in a run is not fixed, so detect it...
 		record2D_colname_list = record2D_table.Properties.VariableNames;
@@ -745,6 +805,14 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		% PDD_offset_timestamp_s for the matching collection
 		% numbers
 		triallog_table = addvars(triallog_table, nan(size(triallog_table.collection_start_s)), nan(size(triallog_table.collection_start_s)), 'NewVariableNames', {'PDD_onset_s', 'PDD_offset_s'});
+		if any(isnan(onset_offset_events_struct.pd_block_onset_collection_num_list))
+			disp([mfilename, ': WARN: found NaNs in photo diode lists, removing them...']);
+			nan_ldx = isnan(onset_offset_events_struct.pd_block_onset_collection_num_list);
+			onset_offset_events_struct.pd_block_onset_collection_num_list(nan_ldx) = [];
+			onset_offset_events_struct.pd_block_offset_collection_num_list(nan_ldx) = [];
+			onset_offset_events_struct.pd_block_onset_s_list(nan_ldx) = [];
+			onset_offset_events_struct.pd_block_offset_s_list(nan_ldx) = [];
+		end
 		triallog_table.PDD_onset_s(onset_offset_events_struct.pd_block_onset_collection_num_list + 1) = onset_offset_events_struct.pd_block_onset_s_list;
 		% for merged sessions search for the record2D_table row with the
 		% closest timestamp and take that row"s tick_idx
@@ -798,7 +866,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		[ triallog_table ] = fn_collect_fixations_around_tick_idx_lists( triallog_table, fixations_struct, record2D_table, tick_idx_list_list, tick_idx_ext);
 	end
 
-	% potentially add additinal per cycle columns
+	% potentially add additional per cycle columns
 	if ~isempty(additional_triallog_column_table)
 		% special casing....
 		if (any(contains(cur_additional_per_cycle_info_FQN_list, 'movement_to_target.csv')))
@@ -973,8 +1041,12 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		%figure('Name', 'All gaze dX CCF') ; histogram(record2D_table.A_binocular_eye_dX(record2D_table.A_binocular_eye_confidence >= 0.9)*json_struct.conf_dot_json.screen_height_mm/json_struct.conf_dot_json.screen_height_pixel, (-1:0.001:1));
 
 		figure('Name', 'All gaze dX mm') ; histogram(record2D_table.A_binocular_eye_dX_pixel(record2D_table.A_binocular_eye_confidence >= 0.9)*json_struct.conf_dot_json.screen_height_mm/json_struct.conf_dot_json.screen_height_pixel, (-40:0.1:60))
-		figure('Name', 'Gaze on face dX mm') ; histogram(record2D_table.A_binocular_eye_dX_pixel(record2D_table.A_binocular_eye_confidence >= 0.9 & record2D_table.distance_A_binocular_eye_to_facecenter <= 1/6)*json_struct.conf_dot_json.screen_height_mm/json_struct.conf_dot_json.screen_height_pixel, (-40:0.1:60))
-		figure('Name', 'Gaze not on face dX mm') ; histogram(record2D_table.A_binocular_eye_dX_pixel(record2D_table.A_binocular_eye_confidence >= 0.9 & ~(record2D_table.distance_A_binocular_eye_to_facecenter <= 1/6))*json_struct.conf_dot_json.screen_height_mm/json_struct.conf_dot_json.screen_height_pixel, (-40:0.1:60))
+		figure('Name', 'Gaze on facecenter dX mm') ; histogram(record2D_table.A_binocular_eye_dX_pixel(record2D_table.A_binocular_eye_confidence >= 0.9 & record2D_table.distance_A_binocular_eye_to_facecenter <= 1/6)*json_struct.conf_dot_json.screen_height_mm/json_struct.conf_dot_json.screen_height_pixel, (-40:0.1:60))
+		figure('Name', 'Gaze on face_left dX mm') ; histogram(record2D_table.A_binocular_eye_dX_pixel(record2D_table.A_binocular_eye_confidence >= 0.9 & record2D_table.distance_A_binocular_eye_to_face_left <= 1/6)*json_struct.conf_dot_json.screen_height_mm/json_struct.conf_dot_json.screen_height_pixel, (-40:0.1:60))
+		figure('Name', 'Gaze on face_right dX mm') ; histogram(record2D_table.A_binocular_eye_dX_pixel(record2D_table.A_binocular_eye_confidence >= 0.9 & record2D_table.distance_A_binocular_eye_to_face_right <= 1/6)*json_struct.conf_dot_json.screen_height_mm/json_struct.conf_dot_json.screen_height_pixel, (-40:0.1:60))
+		%figure('Name', 'Gaze not on face dX mm') ; histogram(record2D_table.A_binocular_eye_dX_pixel(record2D_table.A_binocular_eye_confidence >= 0.9 & ~(record2D_table.distance_A_binocular_eye_to_facecenter <= 1/6))*json_struct.conf_dot_json.screen_height_mm/json_struct.conf_dot_json.screen_height_pixel, (-40:0.1:60))
+		all_faceROI_ldx = ((record2D_table.distance_A_binocular_eye_to_facecenter <= 1/6) | (record2D_table.distance_A_binocular_eye_to_face_left <= 1/6) | (record2D_table.distance_A_binocular_eye_to_face_right <= 1/6));
+		figure('Name', 'Gaze not on face dX mm') ; histogram(record2D_table.A_binocular_eye_dX_pixel(record2D_table.A_binocular_eye_confidence >= 0.9 & ~(all_faceROI_ldx))*json_struct.conf_dot_json.screen_height_mm/json_struct.conf_dot_json.screen_height_pixel, (-40:0.1:60))
 	end
 
 end
