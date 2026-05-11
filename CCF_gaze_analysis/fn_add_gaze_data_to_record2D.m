@@ -45,6 +45,10 @@ for i_gaze_subtable = 1 : length(include_idx)
 		gaze_timestamp_col_name = 'receive_timestamp_s';
 	end
 
+	% data needs to be sorted and have increasing timestamps
+	%[cur_gaze_subtable_sorted_timestamps, sort_idx] = sort(cur_gaze_subtable.(gaze_timestamp_col_name));
+
+
 	% use registered data, otherwise error out?
 	if ismember({'registered_norm_pos'}, cur_gaze_subtable_col_names)
 		gaze_XY_data_col_name = 'registered_norm_pos';
