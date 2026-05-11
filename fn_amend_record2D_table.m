@@ -28,10 +28,10 @@ end
 % for the fixation detector...
 isDraw = 0;
 if ~exist('max_dispersion_threshold', 'var') || isempty(max_dispersion_threshold)
-	max_dispersion_threshold = conf_struct.target_radius/2; % 
+	max_dispersion_threshold = conf_struct.target_radius/2; %
 end
 if ~exist('min_fixation_duration_threshold_ms', 'var') || isempty(min_fixation_duration_threshold_ms)
-	min_fixation_duration_threshold_ms = 100; 
+	min_fixation_duration_threshold_ms = 100;
 end
 
 
@@ -176,7 +176,8 @@ if ~isempty(target_radius) && ismember({'calc_and_store_distances_to_targets'}, 
 end
 
 
-% we 
+% we want also additional face positions... left and right shifted, as well
+% as center down-flipped
 if ~isempty(target_radius) && ismember({'calc_and_store_gaze_distance_to_face_region'}, request_list)
 	disp([mfilename, ': INFO: Processing requested calc_and_store_gaze_distance_to_face_region']);
 
@@ -193,54 +194,83 @@ if ~isempty(target_radius) && ismember({'calc_and_store_gaze_distance_to_face_re
 	valid_gaze_source_stem_names = unique(regexprep(valid_gaze_data_column_names, '_[X|Y]', '_X'));
 
 
-	for i_valid_gaze_stem = 1 : length(valid_gaze_source_stem_names)
-		cur_gaze_stem = valid_gaze_source_stem_names{i_valid_gaze_stem};
-		% now get the side:
-		cur_side = cur_gaze_stem(1);
+	% we want eventually feed in a struct of list for relevant positions,
+	% for now define this here...
+	ROI_center_name_list = {'facecenter', 'face_left', 'face_right'};
+	ROI_center_unit_list = {'pixel', 'pixel', 'pixel'};	% so we now how to convert these...
+	% here we just construct these...
+	field_width = conf_struct.field_size;
+	ROI_center_X_list = [GAZE_OPTS_struct.HP.A.x_screen_intereye_pix, (GAZE_OPTS_struct.HP.A.x_screen_intereye_pix - 0.5*field_width*2/3), (GAZE_OPTS_struct.HP.A.x_screen_intereye_pix + 0.5*field_width*2/3)];
+	ROI_center_Y_list = [GAZE_OPTS_struct.HP.A.y_screen_clostest2eye_pix, GAZE_OPTS_struct.HP.A.y_screen_clostest2eye_pix, GAZE_OPTS_struct.HP.A.y_screen_clostest2eye_pix];
 
-		cur_gaze_unit = 'CCF';
-		if contains(cur_gaze_stem, regexpPattern('_pixel$'))
-			cur_gaze_unit = 'pixel';
-		elseif contains(cur_gaze_stem, regexpPattern('_dva$'))
-			cur_gaze_unit = 'dva';	% this needs special care, so maybe skip it for now
-			disp([mfilename, ': DVA needs separate calculations for left and right eye, for now just skip...']);
-			continue
-		end
+	for i_ROI = 1 : length(ROI_center_name_list)
+		cur_ROI_name = ROI_center_name_list{i_ROI};
+		cur_ROI_unit = ROI_center_unit_list{i_ROI};
+		cur_ROI_center_X = ROI_center_X_list(i_ROI);
+		cur_ROI_center_Y = ROI_center_Y_list(i_ROI);
 
-		% we need this for dva
-		cur_eye_side = regexp(cur_gaze_stem, '(left|right|binocular)', 'match');
-		cur_eye_side = cur_eye_side{1};
-
-		cur_prefix = regexprep(cur_gaze_stem, '_X', '');
-		cur_X_col_name = cur_gaze_stem;
-		cur_Y_col_name = regexprep(cur_X_col_name, '_X', '_Y');
-
-		% the face center position
-		switch cur_gaze_unit
-			case 'pixel'
-				cur_face_center_X = GAZE_OPTS_struct.HP.A.x_screen_intereye_pix;
-				cur_face_center_Y  = GAZE_OPTS_struct.HP.A.y_screen_clostest2eye_pix;
-				face_center_x_pixel = GAZE_OPTS_struct.HP.A.x_screen_intereye_pix;
-				face_center_y_pixel = GAZE_OPTS_struct.HP.A.y_screen_clostest2eye_pix;	% Note this is in EventIDE pixel coordinates, which are y-flipped compared to CCF's, so are gaze pixel coordinates
-				cur_gaze_unit = ['_', cur_gaze_unit];
+		switch cur_ROI_unit
 			case 'CCF'
-				% face_center_y_pixel is in EventIDE pxel coordinates, we
-				% need to convert to CCF pixels first
-				[cur_face_center_X, cur_face_center_Y] = fn_CCF_engine_to_win_pos(face_center_x_pixel, (conf_struct.screen_height_pixel - face_center_y_pixel), conf_struct.field_size, conf_struct.target_radius, conf_struct.field_x_offset, conf_struct.field_y_offset);
-				cur_gaze_unit = '';
-		end
-		
-		cur_new_col_name = ['distance_', cur_prefix, '_to_', 'facecenter', cur_gaze_unit];
-		
-		cur_prefix_pos_XY_list = [record2D_table.(cur_X_col_name)(:), record2D_table.(cur_Y_col_name)(:)];
-		cur_target_pos_XY_list = repmat([cur_face_center_X, cur_face_center_Y], size(cur_prefix_pos_XY_list, 1), 1);
+				[cur_ROI_center_X_pixel, cur_ROI_center_Y_pixel] = fn_CCF_win_to_engine_pos(cur_ROI_center_X, cur_ROI_center_Y, conf_struct.field_size, conf_struct.target_radius, conf_struct.field_x_offset, conf_struct.field_y_offset);
+				cur_ROI_center_Y_pixel = (conf_struct.screen_height_pixel - cur_ROI_center_Y_pixel);	% we need EventIDE convention here, not CCF/python...
+				cur_ROI_center_X_CCF = cur_ROI_center_X;
+				cur_ROI_center_Y_CCF = cur_ROI_center_Y;
+			case 'pixel'
+				% we expect pixel space later below, so just force it here
+				cur_ROI_center_X_pixel = cur_ROI_center_X;
+				cur_ROI_center_Y_pixel = cur_ROI_center_Y;
+				[cur_ROI_center_X_CCF, cur_ROI_center_Y_CCF] = fn_CCF_engine_to_win_pos(cur_ROI_center_X_pixel, (conf_struct.screen_height_pixel - cur_ROI_center_Y_pixel), conf_struct.field_size, conf_struct.target_radius, conf_struct.field_x_offset, conf_struct.field_y_offset);
 
-		record2D_table.(cur_new_col_name) = vecnorm((cur_target_pos_XY_list - cur_prefix_pos_XY_list), 2, 2);	% way faster than calling norm row by row...
-		%record2D_table.([cur_prefix, '_on_', cur_target_stem]) =
-		%record2D_table.(cur_new_col_name) < target_radius;	% faces do not
-		%have a fixed "radius", even though the human face at playing
-		%distance is about 1/3 of the playing field wide, so 1/6 of playing
-		%field seems reasonable radius
+		otherwise
+			error([mfilename, ': ERROR: unhandled ROI unit: ', cur_ROI_unit]);
+		end
+
+		for i_valid_gaze_stem = 1 : length(valid_gaze_source_stem_names)
+			cur_gaze_stem = valid_gaze_source_stem_names{i_valid_gaze_stem};
+			% now get the side:
+			cur_side = cur_gaze_stem(1);
+
+			cur_gaze_unit = 'CCF';
+			if contains(cur_gaze_stem, regexpPattern('_pixel$'))
+				cur_gaze_unit = 'pixel';
+			elseif contains(cur_gaze_stem, regexpPattern('_dva$'))
+				cur_gaze_unit = 'dva';	% this needs special care, so maybe skip it for now
+				disp([mfilename, ': DVA needs separate calculations for left and right eye, for now just skip...']);
+				continue
+			end
+
+			% we need this for dva
+			cur_eye_side = regexp(cur_gaze_stem, '(left|right|binocular)', 'match');
+			cur_eye_side = cur_eye_side{1};
+
+			cur_prefix = regexprep(cur_gaze_stem, '_X', '');
+			cur_X_col_name = cur_gaze_stem;
+			cur_Y_col_name = regexprep(cur_X_col_name, '_X', '_Y');
+
+			% the face center position
+			switch cur_gaze_unit
+				case 'pixel'
+					cur_ROI_center_X = cur_ROI_center_X_pixel;
+					cur_ROI_center_Y = cur_ROI_center_Y_pixel;
+					cur_gaze_unit = ['_', cur_gaze_unit];
+				case 'CCF'
+					cur_ROI_center_X = cur_ROI_center_X_CCF;
+					cur_ROI_center_Y = cur_ROI_center_Y_CCF;
+					cur_gaze_unit = '';
+			end
+
+			cur_new_col_name = ['distance_', cur_prefix, '_to_', cur_ROI_name, cur_gaze_unit];
+
+			cur_prefix_pos_XY_list = [record2D_table.(cur_X_col_name)(:), record2D_table.(cur_Y_col_name)(:)];
+			cur_target_pos_XY_list = repmat([cur_ROI_center_X, cur_ROI_center_Y], size(cur_prefix_pos_XY_list, 1), 1);
+
+			record2D_table.(cur_new_col_name) = vecnorm((cur_target_pos_XY_list - cur_prefix_pos_XY_list), 2, 2);	% way faster than calling norm row by row...
+			%record2D_table.([cur_prefix, '_on_', cur_target_stem]) =
+			%record2D_table.(cur_new_col_name) < target_radius;	% faces do not
+			%have a fixed "radius", even though the human face at playing
+			%distance is about 1/3 of the playing field wide, so 1/6 of playing
+			%field seems reasonable radius
+		end
 	end
 	%timestamps.(mfilename).end_on_target = toc(timestamps.(mfilename).start_on_target);
 	%disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end_on_target), ' seconds.']);
@@ -277,7 +307,7 @@ if ismember({'detect_aim_fixations'}, request_list)
 		cur_data_struct_of_arr.X = record2D_table.([cur_aim, '_X']);
 		cur_data_struct_of_arr.Y = record2D_table.([cur_aim, '_Y']);
 		% local override
-		% max_dispersion_threshold = conf_struct.target_radius/2; 
+		% max_dispersion_threshold = conf_struct.target_radius/2;
 		% min_fixation_duration_threshold_ms = 100;
 		% isDraw = 1;
 		cur_fixation_struct = fn_spatial_dispersion_fixation_detector_CCF(cur_data_struct_of_arr, max_dispersion_threshold, min_fixation_duration_threshold_ms, isDraw);
@@ -306,9 +336,9 @@ if ismember({'detect_agent_fixations'}, request_list)
 		cur_data_struct_of_arr.X = record2D_table.([cur_agent, '_X']);
 		cur_data_struct_of_arr.Y = record2D_table.([cur_agent, '_Y']);
 		% local override
-		% max_dispersion_threshold = conf_struct.target_radius/2; 
+		% max_dispersion_threshold = conf_struct.target_radius/2;
 		% min_fixation_duration_threshold_ms = 100;
-		% isDraw = 1;		
+		% isDraw = 1;
 		cur_fixation_struct = fn_spatial_dispersion_fixation_detector_CCF(cur_data_struct_of_arr, max_dispersion_threshold, min_fixation_duration_threshold_ms, isDraw);
 		record2D_table.([cur_agent, '_per_sample_fixID']) = cur_fixation_struct.per_sample_fixID;
 		cur_fixation_struct = rmfield(cur_fixation_struct, 'per_sample_fixID');	% we move this into record2D already...
@@ -331,18 +361,129 @@ end
 if ismember({'detect_eye_fixations'}, request_list)
 	for i_eye = 1 : length(eye_prefix_list)
 		disp([mfilename, ': INFO: Processing requested detect_eye_fixations: ', eye_prefix_list{i_eye}]);
-		timestamps.(mfilename).detect_eye_fixations.(agent_prefix_list{i_eye}).start = tic;
+		timestamps.(mfilename).detect_eye_fixations.(eye_prefix_list{i_eye}).start = tic;
 		cur_eye = eye_prefix_list{i_eye};
+
+		% we only want to detect fixations once, but take the best matching
+		% gaze source into account
+		cur_gaze_unit_suffix_string = GAZE_OPTS_struct.gaze_unit_suffix_string;
+		if ~ismember({[cur_eye, '_X', cur_gaze_unit_suffix_string]}, record2D_table.Properties.VariableNames)
+			disp([mfilename, ': WARN: requested gaze suffix (', cur_gaze_unit_suffix_string, ') does not seem to exists, defaulting to field-relative CCF space']);
+			cur_gaze_unit_suffix_string = '';
+		end
+
 		cur_data_struct_of_arr.timestamp = record2D_table.timestamp * 1000;	% we want milliseconds
-		cur_data_struct_of_arr.X = record2D_table.([cur_eye, '_X']);
-		cur_data_struct_of_arr.Y = record2D_table.([cur_eye, '_Y']);
-		% local override
-		% max_dispersion_threshold = conf_struct.target_radius/2; 
-		% min_fixation_duration_threshold_ms = 100;
-		% isDraw = 1;		
-		cur_fixation_struct = fn_spatial_dispersion_fixation_detector_CCF(cur_data_struct_of_arr, max_dispersion_threshold, min_fixation_duration_threshold_ms, isDraw);
+		cur_data_struct_of_arr.X = record2D_table.([cur_eye, '_X', cur_gaze_unit_suffix_string]);
+		cur_data_struct_of_arr.Y = record2D_table.([cur_eye, '_Y', cur_gaze_unit_suffix_string]);
+
+		if contains(cur_eye, 'binocular') && ismember({[cur_eye, '_dX', cur_gaze_unit_suffix_string]}, record2D_table.Properties.VariableNames)
+			cur_data_struct_of_arr.depth_dX = record2D_table.([cur_eye, '_dX', cur_gaze_unit_suffix_string]);
+		end
+
+		% do we want to exclude some samples, then do it here...
+		valid_sample_ldx = [];
+		invalid_sample_ldx = [];
+		if ismember({[cur_eye, GAZE_OPTS_struct.gaze_selection_col_suffix_string]}, record2D_table.Properties.VariableNames)
+			valid_sample_ldx = ones(size(record2D_table.([cur_eye, GAZE_OPTS_struct.gaze_selection_col_suffix_string]))) == 1;
+			if isfield(GAZE_OPTS_struct, 'gaze_selection_min_threshold_value') && ~isempty(GAZE_OPTS_struct.gaze_selection_min_threshold_value)
+				valid_sample_ldx(record2D_table.([cur_eye, GAZE_OPTS_struct.gaze_selection_col_suffix_string]) <= GAZE_OPTS_struct.gaze_selection_min_threshold_value) = false;
+			end
+			if isfield(GAZE_OPTS_struct, 'gaze_selection_max_threshold_value') && ~isempty(GAZE_OPTS_struct.gaze_selection_max_threshold_value)
+				valid_sample_ldx(record2D_table.([cur_eye, GAZE_OPTS_struct.gaze_selection_col_suffix_string]) >= GAZE_OPTS_struct.gaze_selection_max_threshold_value) = false;
+			end
+			invalid_sample_ldx = ~valid_sample_ldx;
+			cur_data_struct_of_arr.X(invalid_sample_ldx)= nan;
+			cur_data_struct_of_arr.Y(invalid_sample_ldx)= nan;
+			if isfield(cur_data_struct_of_arr, 'depth_dX')
+				cur_data_struct_of_arr.depth_dX(invalid_sample_ldx)= nan;
+			end
+		end
+
+		% DVA
+		if isfield(GAZE_OPTS_struct, GAZE_OPTS_struct.fixation_detection_method) && isfield(GAZE_OPTS_struct.(GAZE_OPTS_struct.fixation_detection_method), 'max_dispersion_threshold_dva')
+			cur_max_dispersion_threshold_dva = GAZE_OPTS_struct.(GAZE_OPTS_struct.fixation_detection_method).max_dispersion_threshold_dva;
+		else
+			cur_max_dispersion_threshold_dva = [];
+		end
+
+		% PIXEL
+		if ~isempty(cur_max_dispersion_threshold_dva)
+			% NOTE: this is only approximately correct around the main gaze
+			% axis, the more peripheral the less accurate, but that is
+			% unavoidable
+			cur_max_dispersion_threshold_pixel = (tand(cur_max_dispersion_threshold_dva) * conf_struct.screen_to_eye_distance_NHP_mm) * (conf_struct.screen_width_pixel/conf_struct.screen_width_mm);
+		else
+			if isfield(GAZE_OPTS_struct, GAZE_OPTS_struct.fixation_detection_method) && isfield(GAZE_OPTS_struct.(GAZE_OPTS_struct.fixation_detection_method), 'max_dispersion_threshold_pixel')
+				cur_max_dispersion_threshold_pixel = GAZE_OPTS_struct.(GAZE_OPTS_struct.fixation_detection_method).max_dispersion_threshold_pixel;
+			else
+				cur_max_dispersion_threshold_pixel = [];
+			end
+		end
+
+		% CCF
+		if ~isempty(cur_max_dispersion_threshold_pixel)
+			% NOTE: this is only approximately correct around the main gaze
+			% axis, the more peripheral the less accurate, but that is
+			% unavoidable
+			cur_max_dispersion_threshold_CCF = cur_max_dispersion_threshold_pixel / (conf_struct.field_size - 2 * conf_struct.target_radius * conf_struct.field_size);
+		else
+			if isfield(GAZE_OPTS_struct, GAZE_OPTS_struct.fixation_detection_method) && isfield(GAZE_OPTS_struct.(GAZE_OPTS_struct.fixation_detection_method), 'max_dispersion_threshold_CCF')
+				cur_max_dispersion_threshold_CCF = GAZE_OPTS_struct.(GAZE_OPTS_struct.fixation_detection_method).max_dispersion_threshold_CCF;
+			else
+				cur_max_dispersion_threshold_CCF = [];
+				error([mfilename, ': ERROR: could not find any max_dispersion_threshold...']);
+			end
+		end
+
+		switch cur_gaze_unit_suffix_string
+			case '_dva'
+				cur_max_dispersion_threshold = cur_max_dispersion_threshold_dva;
+			case '_pixel'
+				cur_max_dispersion_threshold = cur_max_dispersion_threshold_pixel;
+			case ''
+				cur_max_dispersion_threshold = cur_max_dispersion_threshold_CCF;
+		end
+		cur_min_fixation_duration_threshold_ms = GAZE_OPTS_struct.(GAZE_OPTS_struct.fixation_detection_method).min_duration_threshold_ms;
+
+
+
+		cur_fixation_struct = fn_spatial_dispersion_fixation_detector_CCF(cur_data_struct_of_arr, cur_max_dispersion_threshold, cur_min_fixation_duration_threshold_ms, isDraw);
 		record2D_table.([cur_eye, '_per_sample_fixID']) = cur_fixation_struct.per_sample_fixID;
 		cur_fixation_struct = rmfield(cur_fixation_struct, 'per_sample_fixID');	% we move this into record2D already...
+
+		% also add average gaze positions for CCF space (pixel space can be easily converted from that)
+		if ~isempty(cur_gaze_unit_suffix_string)
+			disp([mfilename, ': INFO: adding average fixation positions in CCF space']);
+			n_fixations = length(cur_fixation_struct.duration_ms);
+			mean_X_CCF = nan(size(cur_fixation_struct.mean_X));
+			mean_Y_CCF = nan(size(cur_fixation_struct.mean_Y));
+			mean_dX_CCF = nan(size(cur_fixation_struct.mean_X));
+
+			% conversion for dX values
+			pixel_to_mm = conf_struct.screen_height_mm/conf_struct.screen_height_pixel;
+			CCF_to_mm = (conf_struct.field_size - 2 * conf_struct.target_radius * conf_struct.field_size) * pixel_to_mm;
+
+
+			for i_fixation = 1 : n_fixations
+				cur_fixation_ldx = record2D_table.([cur_eye, '_per_sample_fixID']) == i_fixation;
+				% we do not want to re-map the actual gaze data, but
+				% exclude these samples from averaging...
+				if ~isempty(valid_sample_ldx)
+					cur_fixation_ldx = cur_fixation_ldx & valid_sample_ldx;
+				end
+
+				mean_X_CCF(i_fixation) = mean(record2D_table.([cur_eye, '_X'])(cur_fixation_ldx), 'omitnan');
+				mean_Y_CCF(i_fixation) = mean(record2D_table.([cur_eye, '_Y'])(cur_fixation_ldx), 'omitnan');
+				% dX only exists for binocular data...
+				if contains(cur_eye, 'binocular') && ismember({[cur_eye, '_dX', cur_gaze_unit_suffix_string]}, record2D_table.Properties.VariableNames)
+					mean_dX_CCF(i_fixation) = mean(record2D_table.([cur_eye, '_dX'])(cur_fixation_ldx), 'omitnan');
+				end
+			end
+			cur_fixation_struct.mean_X_CCF = mean_X_CCF;
+			cur_fixation_struct.mean_Y_CCF = mean_Y_CCF;
+			cur_fixation_struct.mean_dX_CCF = mean_dX_CCF;	
+		end
+
 		fixations_struct.(cur_eye) = cur_fixation_struct;
 		if (debug)
 			cur_fh = figure('Name', cur_eye);
@@ -351,9 +492,9 @@ if ismember({'detect_eye_fixations'}, request_list)
 			axis equal
 			axis square
 		end
-		timestamps.(mfilename).detect_agent_fixations.(eye_prefix_list{i_eye}).end = toc;
-		duration_s = timestamps.(mfilename).detect_eye_fixations.(eye_prefix_list{i_eye}).end - timestamps.(mfilename).detect_eye_fixations.(eye_prefix_list{i_eye}).start;
-		disp(['detect_eye_fixations (', eye_prefix_list{i_eye}, ') took: ', num2str(duration_s), ' seconds.']);
+		%timestamps.(mfilename).detect_eye_fixations.(eye_prefix_list{i_eye}).end = toc();
+		duration_s = toc(timestamps.(mfilename).detect_eye_fixations.(eye_prefix_list{i_eye}).start);
+		disp(['detect_eye_fixations (', eye_prefix_list{i_eye}, ') took: ', num2str(duration_s), ' seconds (', num2str(floor(duration_s/(60*60))), ' hours ', num2str(floor(duration_s/60)), ' minutes ', num2str(mod(duration_s, 60)), ' seconds).']);
 	end
 end
 
@@ -361,7 +502,8 @@ end
 
 
 timestamps.(mfilename).end = toc(timestamps.(mfilename).start);
-disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end), ' seconds.']);
+cur_duration_s = timestamps.(mfilename).end;
+disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end), ' seconds (', num2str(floor(cur_duration_s/(60*60))), ' hours ', num2str(floor(cur_duration_s/60)), ' minutes ', num2str(mod(cur_duration_s, 60)), ' seconds).']);
 disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end / 60), ' minutes.']);
 
 
