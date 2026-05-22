@@ -2,6 +2,11 @@ function [ out_pupillabs_struct ] = fn_amend_pupillabs_data( in_pupillabs_struct
 %FN_AMEND_PUPILLABS_DATA Summary of this function goes here
 %   Detailed explanation goes here
 
+timestamps.(mfilename).start = tic;
+disp(['Starting: ', mfilename]);
+dbstop if error
+fq_mfilename = mfilename('fullpath');
+
 
 if ~exist('GAZE_OPTS_struct', 'var') || isempty(GAZE_OPTS_struct)
 	%GAZE_OPTS_struct.per_session_resultdir_FQD = fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', 'per_session_data_collection', 'GAZE_TOUCH');	% where to store the per session results in addition to the local storage, keep empty to ignore
@@ -171,6 +176,12 @@ for i_set = 1 : length(set_Side_list)
 		out_pupillabs_struct.(cur_subtable_name) = cur_data_table;
 	end
 end
+
+
+% final end...
+timestamps.(mfilename).end = toc(timestamps.(mfilename).start);
+cur_duration_s = timestamps.(mfilename).end;
+disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end), ' seconds (', num2str(floor(cur_duration_s/(60*60))), ' hours ', num2str(floor(cur_duration_s/60)), ' minutes ', num2str(mod(cur_duration_s, 60)), ' seconds).']);
 
 end
 
