@@ -1,4 +1,4 @@
-function [ triallog_table ] = fn_collect_fixations_around_tick_idx_lists( triallog_table, fixations_struct, record2D_table, tick_idx_col_name_list, tick_idx_ext)
+function [ triallog_table ] = fn_collect_fixations_around_tick_idx_lists( triallog_table, fixations_struct, fixation_subtables_include_list, record2D_table, tick_idx_col_name_list, tick_idx_ext)
 %FN_COLLECT_FIXATIONS_AROUND_TICK_IDX_LIST Summary of this function goes here
 %   Detailed explanation goes here
 % TODO:
@@ -7,6 +7,11 @@ function [ triallog_table ] = fn_collect_fixations_around_tick_idx_lists( triall
 %	fixation
 %	2) optionally pass in validity ranges for valid prev/next fixations,
 %	e.g. to force them to happen within the same cycle
+
+timestamps.(mfilename).start = tic;
+disp(['Starting: ', mfilename]);
+dbstop if error
+fq_mfilename = mfilename('fullpath');
 
 triallog_table = triallog_table;
 
@@ -42,6 +47,13 @@ if ~isempty(fixations_struct)
 
 		for i_fix_source = 1 : length(fixations_struct_col_name_list)
 			cur_fix_source_name = fixations_struct_col_name_list{i_fix_source};
+
+			if ismember({cur_fix_source_name}, fixation_subtables_include_list)
+				disp([mfilename, ': INFO: current fixation subtable (', cur_fix_source_name, ') in fixation_subtables_include_list, processing']);
+			else
+				disp([mfilename, ': INFO: current fixation subtable (', cur_fix_source_name, ') not in fixation_subtables_include_list, skipping']);
+				continue
+			end
 
 			switch(cur_fix_source_name)
 				case {'aims0', 'agent0'}
@@ -134,6 +146,12 @@ if ~isempty(fixations_struct)
 else
 	disp('Empty fixation_struct, nothing to do...');
 end
+
+
+% final end...
+timestamps.(mfilename).end = toc(timestamps.(mfilename).start);
+cur_duration_s = timestamps.(mfilename).end;
+disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end), ' seconds (', num2str(floor(cur_duration_s/(60*60))), ' hours ', num2str(floor(cur_duration_s/60)), ' minutes ', num2str(mod(cur_duration_s, 60)), ' seconds).']);
 
 
 
