@@ -21,7 +21,13 @@ if ~exist('request_list', 'var') || isempty(request_list)
 	request_list = {'nan_out_invalid_aims_pos', 'nan_out_invalid_agent_pos', ...
 		'calc_and_store_distances_to_targets', ...
 		'add_per_target_changed_pos_col', ...
-		'detect_agent_fixations', 'detect_aim_fixations'};
+		...'detect_agent_fixations', 'detect_aim_fixations', ...
+		'detect_eye_fixations', ...	% needs fixing
+		'calc_and_store_gaze_distance_to_face_region', ...
+		'calc_and_store_gaze_distance_to_agents', ...
+		'calc_and_store_gaze_distance_to_aims', ...
+		};
+
 end
 
 
@@ -51,7 +57,7 @@ aim_prefix_list = unique(aim_prefix_list);
 
 
 % the number of agents in a run is not fixed, so detect it...
-agent_prefix_list ={};
+agent_prefix_list = {};
 for i_col = 1 : length(record2D_colname_list)
 	cur_col_name = record2D_colname_list{i_col};
 	cur_agent_prefix_cell = regexp(cur_col_name, '^agent\d*', 'match');
@@ -64,7 +70,7 @@ agent_prefix_list = unique(agent_prefix_list);
 
 
 % the number of targets in a run is not fixed, so detect it...
-target_prefix_list ={};
+target_prefix_list = {};
 for i_col = 1 : length(record2D_colname_list)
 	cur_col_name = record2D_colname_list{i_col};
 	cur_target_prefix_cell = regexp(cur_col_name, '^target\d*', 'match');
@@ -76,7 +82,7 @@ target_prefix_list = unique(target_prefix_list);
 
 
 % the number of targets in a run is not fixed, so detect it...
-eye_prefix_list ={};
+eye_prefix_list = {};
 for i_col = 1 : length(record2D_colname_list)
 	cur_col_name = record2D_colname_list{i_col};
 	cur_eye_prefix_cell = regexp(cur_col_name, '^[A|B]_(right|left|binocular)_eye', 'match');
@@ -275,6 +281,81 @@ if ~isempty(target_radius) && ismember({'calc_and_store_gaze_distance_to_face_re
 	%timestamps.(mfilename).end_on_target = toc(timestamps.(mfilename).start_on_target);
 	%disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end_on_target), ' seconds.']);
 end
+
+if ismember({'calc_and_store_gaze_distance_to_agents'}, request_list)
+	disp([mfilename, ': INFO: Processing requested calc_and_store_gaze_distance_to_agents']);
+	% we only do this for the CCF relative space to avoid conversion to
+	% pixel space
+	exclude_stem_wildcard_list = {'_pixel$', '_dva$'};
+
+	% check the gaze sources
+	valid_gaze_data_column_idx = contains(record2D_colname_list, regexpPattern('^[A|B]_(left|right|binocular)_eye_[X|Y]+'));
+	valid_gaze_data_column_names = record2D_colname_list(valid_gaze_data_column_idx);
+
+	% get rid of the Y...
+	valid_gaze_source_stem_names = unique(regexprep(valid_gaze_data_column_names, '_[X|Y]', '_X'));
+
+	for i_valid_gaze_stem = 1 : length(valid_gaze_source_stem_names)
+		cur_gaze_stem = valid_gaze_source_stem_names{i_valid_gaze_stem};
+		if contains(cur_gaze_stem, regexpPattern(exclude_stem_wildcard_list))
+			disp([mfilename, ': INFO: excluding current gaze stem (', cur_gaze_stem, ') as it matches the exclude_stem_wildcard_list']);
+			continue;
+		end
+		cur_prefix = regexprep(cur_gaze_stem, '_X', '');
+		cur_X_col_name = cur_gaze_stem;
+		cur_Y_col_name = regexprep(cur_X_col_name, '_X', '_Y');
+
+		cur_valid_gaze_stem_XY = [record2D_table.(cur_X_col_name)(:), record2D_table.(cur_Y_col_name)(:)];
+
+		for i_agent = 1 : length(agent_prefix_list)
+			cur_agent = agent_prefix_list{i_agent};
+			cur_new_col_name = ['distance_', cur_prefix, '_to_', cur_agent];
+			% if isempty(on_target_struct2) || ~isfield(on_target_struct2, cur_new_col_name)
+			% 	on_target_struct2.(cur_new_col_name) = logical(zeros(size(record2D_table.timestamp)));
+			% end
+			cur_agent_pos_XY_list = [record2D_table.([cur_agent, '_X'])(:), record2D_table.([cur_agent, '_Y'])(:)];
+			record2D_table.(cur_new_col_name) = vecnorm((cur_agent_pos_XY_list - cur_valid_gaze_stem_XY), 2, 2);	% way faster than calling norm row by row...
+		end
+	end
+end
+
+if ismember({'calc_and_store_gaze_distance_to_aims'}, request_list)
+	disp([mfilename, ': INFO: Processing requested calc_and_store_gaze_distance_to_aims']);
+	% we only do this for the CCF relative space to avoid conversion to
+	% pixel space
+	exclude_stem_wildcard_list = {'_pixel$', '_dva$'};
+
+	% check the gaze sources
+	valid_gaze_data_column_idx = contains(record2D_colname_list, regexpPattern('^[A|B]_(left|right|binocular)_eye_[X|Y]+'));
+	valid_gaze_data_column_names = record2D_colname_list(valid_gaze_data_column_idx);
+
+	% get rid of the Y...
+	valid_gaze_source_stem_names = unique(regexprep(valid_gaze_data_column_names, '_[X|Y]', '_X'));
+
+	for i_valid_gaze_stem = 1 : length(valid_gaze_source_stem_names)
+		cur_gaze_stem = valid_gaze_source_stem_names{i_valid_gaze_stem};
+		if contains(cur_gaze_stem, regexpPattern(exclude_stem_wildcard_list))
+			disp([mfilename, ': INFO: excluding current gaze stem (', cur_gaze_stem, ') as it matches the exclude_stem_wildcard_list']);
+			continue;
+		end
+		cur_prefix = regexprep(cur_gaze_stem, '_X', '');
+		cur_X_col_name = cur_gaze_stem;
+		cur_Y_col_name = regexprep(cur_X_col_name, '_X', '_Y');
+
+		cur_valid_gaze_stem_XY = [record2D_table.(cur_X_col_name)(:), record2D_table.(cur_Y_col_name)(:)];
+
+		for i_aim = 1 : length(aim_prefix_list)
+			cur_aim = aim_prefix_list{i_aim};
+			cur_new_col_name = ['distance_', cur_prefix, '_to_', cur_aim];
+			% if isempty(on_target_struct2) || ~isfield(on_target_struct2, cur_new_col_name)
+			% 	on_target_struct2.(cur_new_col_name) = logical(zeros(size(record2D_table.timestamp)));
+			% end
+			cur_aim_pos_XY_list = [record2D_table.([cur_aim, '_X'])(:), record2D_table.([cur_aim, '_Y'])(:)];
+			record2D_table.(cur_new_col_name) = vecnorm((cur_aim_pos_XY_list - cur_valid_gaze_stem_XY), 2, 2);	% way faster than calling norm row by row...
+		end
+	end
+end
+
 
 
 if ismember({'add_per_target_changed_pos_col'}, request_list)
