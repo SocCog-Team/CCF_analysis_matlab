@@ -423,8 +423,8 @@ if isempty(MATCH_cur_target_IDX_idx) || force_collecting_by_processing
 	end
 end
 
-
-
+% add an index here foe later use in the filtered version of this table
+sorted_target_state_transition_table.row_idx = (1:1:length(sorted_target_state_transition_table.target_position_changed))';
 
 
 
@@ -674,9 +674,21 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 		% this can be empty and we simply keep the preallocated values
 		if (length(cur_collection_substate_idx) == 1)
 			local_cur_tick_idx = cur_collection_target_state_transition_table.tick_idx(cur_collection_substate_idx);
+			cur_sorted_target_state_transition_table_row_idx = cur_collection_target_state_transition_table.row_idx(cur_collection_substate_idx);
+
 
 			triallog_table.(['col_targ_', cur_target_state_name, '_start_s'])(cur_trial_num) = record2D_table.timestamp(local_cur_tick_idx);	% TODO or use tick_timestamp from sorted_target_state_transition_table
 			triallog_table.(['col_targ_', cur_target_state_name, '_tick_idx'])(cur_trial_num) = local_cur_tick_idx;
+
+			% this is mainly useful for epochs with variable length...
+			if cur_sorted_target_state_transition_table_row_idx < size(sorted_target_state_transition_table, 1)
+				triallog_table.(['col_targ_', cur_target_state_name, '_end_s'])(cur_trial_num) = sorted_target_state_transition_table.tick_timestamp(cur_sorted_target_state_transition_table_row_idx+1);	% TODO or use tick_timestamp from sorted_target_state_transition_table
+				triallog_table.(['col_targ_', cur_target_state_name, '_end_tick_idx'])(cur_trial_num) = sorted_target_state_transition_table.tick_idx(cur_sorted_target_state_transition_table_row_idx+1);
+			else
+				triallog_table.(['col_targ_', cur_target_state_name, '_end_s'])(cur_trial_num) = 0;
+				triallog_table.(['col_targ_', cur_target_state_name, '_end_s'])(cur_trial_num) = 0;
+			end
+
 
 			% add the aim and agent positions as well at the state transitions?
 			triallog_table.(['col_targ_', cur_target_state_name, '_aims0_XY'])(cur_trial_num, :) = [record2D_table.aims0_X(local_cur_tick_idx); record2D_table.aims0_X(local_cur_tick_idx)];
@@ -848,6 +860,28 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 				&& (contains(sorted_target_state_transition_table.old_state_ENUM_name(cur_transition_search_idx), 'rewarding') && contains(sorted_target_state_transition_table.new_state_ENUM_name(cur_transition_search_idx), 'pre_acquisition'))
 			triallog_table.trial_end_s(cur_trial_num) = sorted_target_state_transition_table.tick_timestamp(cur_transition_search_idx);
 			triallog_table.trial_end_tick_idx(cur_trial_num) = sorted_target_state_transition_table.tick_idx(cur_transition_search_idx);
+
+			if cur_trial_num == 1
+				triallog_table.cycle_start_tick_idx(1) = 1;
+				triallog_table.cycle_start_s(1) = record2D_table.timestamp(triallog_table.cycle_start_tick_idx(1));
+			else
+				if ~isnan(triallog_table.col_targ_pre_acquisition_end_tick_idx(cur_trial_num - 1))
+					triallog_table.cycle_start_tick_idx(cur_trial_num) = triallog_table.col_targ_pre_acquisition_end_tick_idx(cur_trial_num - 1);	% at the tick of the state change... from the previous cycle
+					if triallog_table.cycle_start_tick_idx(cur_trial_num) > 0
+						triallog_table.cycle_start_s(cur_trial_num) = record2D_table.timestamp(triallog_table.cycle_start_tick_idx(cur_trial_num));
+					else
+						triallog_table.cycle_start_s(cur_trial_num) = nan;
+					end
+				end
+			end
+			
+			triallog_table.cycle_end_tick_idx(cur_trial_num) = triallog_table.col_targ_pre_acquisition_end_tick_idx(cur_trial_num) - 1; % one tick before the state change...
+			if triallog_table.cycle_end_tick_idx(cur_trial_num) > 0
+				triallog_table.cycle_end_s(cur_trial_num) =  record2D_table.timestamp(triallog_table.cycle_end_tick_idx(cur_trial_num));
+			else
+				triallog_table.cycle_end_s(cur_trial_num) = nan;
+			end
+			
 			break
 		end
 	end
