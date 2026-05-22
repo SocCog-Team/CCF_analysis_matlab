@@ -12,6 +12,9 @@ dbstop if error
 fq_mfilename = mfilename('fullpath');
 debug = 0;
 
+% control variables
+show_2D_fixations = 0;	% first variant, show 2D fixation positions for a specific epoch, splitting out near/far
+
 
 % if we run this directly for testing we want/need this to be in the
 % path...
@@ -68,24 +71,24 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 
 	only_process_gaze_calibration = 0;
 	if (only_process_gaze_calibration)
-	% the gaze calibration sessions...
-	cur_CCF_runfolder_FQN_list = { ...
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', '20260319T110006.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% first session with monkey gaze data...
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260320', '20260320TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% the calibration routine was broken, this session uses the calibration from 260319 instead
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260326', '20260326T103026.A_Elmo.B_NONE.SCP_01.sessiondir'), ...
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260326', '20260326T103026.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260402', '20260402T100142.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260403', '20260403T093508.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260409', '20260409T100642.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260423', '20260423T102851.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260424', '20260424T101945.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260428', '20260428T102602.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260429', '20260429T100042.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13	
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260430', '20260430T090028.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13	
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260501', '20260501T085455.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13	
-		};
+		% the gaze calibration sessions...
+		cur_CCF_runfolder_FQN_list = { ...
+			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', '20260319T110006.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% first session with monkey gaze data...
+			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260320', '20260320TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% the calibration routine was broken, this session uses the calibration from 260319 instead
+			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260326', '20260326T103026.A_Elmo.B_NONE.SCP_01.sessiondir'), ...
+			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260326', '20260326T103026.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
+			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260402', '20260402T100142.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
+			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260403', '20260403T093508.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
+			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260409', '20260409T100642.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
+			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260423', '20260423T102851.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260424', '20260424T101945.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260428', '20260428T102602.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260429', '20260429T100042.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260430', '20260430T090028.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260501', '20260501T085455.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+			};
 	end
-% use a file picker to select the desired folder
+	% use a file picker to select the desired folder
 end
 
 if ~iscell(cur_CCF_runfolder_FQN_list)
@@ -156,8 +159,8 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 				ROI_center_Y_list_pixel(i_ROI) = cur_ROI_center_Y_pixel;
 				ROI_center_X_list(i_ROI) = cur_ROI_center_X_CCF;
 				ROI_center_Y_list(i_ROI) = cur_ROI_center_Y_CCF;
-		otherwise
-			error([mfilename, ': ERROR: unhandled ROI unit: ', cur_ROI_unit]);
+			otherwise
+				error([mfilename, ': ERROR: unhandled ROI unit: ', cur_ROI_unit]);
 		end
 	end
 
@@ -201,7 +204,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 		otherwise
 			% assume the partner normally sits opposite to the monkey...
-			per_run_face_ROI_idx = repmat(find(ismember(face_ROI.names, {'facecenter'})), n_src_runs, 1);	
+			per_run_face_ROI_idx = repmat(find(ismember(face_ROI.names, {'facecenter'})), n_src_runs, 1);
 	end
 
 
@@ -242,7 +245,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	for i_cycle = 1 : length(exclude_cycle_ldx)
 		if ~exclude_cycle_ldx(i_cycle)
 			cur_trial_start_tick_idx = triallog_table.cycle_start_tick_idx(i_cycle);
-			cur_trial_end_tick_idx = triallog_table.cycle_end_tick_idx(i_cycle) ;	
+			cur_trial_end_tick_idx = triallog_table.cycle_end_tick_idx(i_cycle) ;
 			if (cur_trial_start_tick_idx > 0) && (cur_trial_end_tick_idx > 0)
 				exclude_tick_ldx(cur_trial_start_tick_idx:cur_trial_end_tick_idx) = false;
 			end
@@ -250,14 +253,14 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	end
 
 	% create by collection type ldx lists...
-	
+
 
 
 	% now create the tick_ldx for the different epochs and store
 	% TODO iterate over epochs:
 	% acquisition period: target collection period: reward_period,
 	% pre_acquisiton
-	
+
 	target_state_col_ldx = contains(triallog_table.Properties.VariableNames, regexpPattern('^col_targ_\w*_tick_idx$'));
 	target_state_end_col_ldx = contains(triallog_table.Properties.VariableNames, regexpPattern('^col_targ_\w*_end_tick_idx$'));
 	target_state_start_col_ldx = target_state_col_ldx & ~target_state_end_col_ldx;
@@ -274,7 +277,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 	for i_target_state = 1 : length(target_state_name_list)
 		cur_target_state = target_state_name_list{i_target_state};
-		
+
 		cur_target_state_start_tick_idx_list = triallog_table.([cur_target_state, '_tick_idx']);
 		cur_target_state_end_tick_idx_list = triallog_table.([cur_target_state, '_end_tick_idx']);
 
@@ -283,7 +286,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			cur_target_state_start_tick_idx = cur_target_state_start_tick_idx_list(i_cycle);
 			cur_target_state_end_tick_idx = cur_target_state_end_tick_idx_list(i_cycle);
 			cur_cycle_state_duration_nticks = cur_target_state_end_tick_idx - cur_target_state_start_tick_idx;
-			
+
 			if isnan(cur_target_state_start_tick_idx) || isnan(cur_target_state_end_tick_idx) || (cur_target_state_start_tick_idx == 0) || (cur_target_state_end_tick_idx == 0)
 				disp([mfilename, ': INFO: excluded cycle (', cur_target_state,'): ', num2str(i_cycle)]);
 				continue
@@ -293,132 +296,132 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			per_state_valid_tick_idx_ldx_array(cur_target_state_start_tick_idx:cur_target_state_end_tick_idx, i_target_state) = true;
 
 			% now figure out the per stateXcycle fixation percentages on
-			% the 
-			
+			% the
+
 
 
 		end
 	end
-
-
-
-
-	% find relevant fixations around events 
-	ref_event_col_stem_name = 'col_targ_initiate_reward'; % either tick_idx or start_s
-	gaze_epoch_duration_s = 2;
-
-	ref_event_start_s_list = triallog_table.([ref_event_col_stem_name, '_start_s']);
-	ref_event_start_tick_idx_list = triallog_table.([ref_event_col_stem_name, '_tick_idx']);
-	ref_event_end_s_list = ref_event_start_s_list + gaze_epoch_duration_s;
-	ref_event_end_tick_idx_list = nan(size(ref_event_end_s_list));
-	
-	fixID_in_ref_epoch_cell = cell(size(ref_event_end_tick_idx_list));
-	for i_ref_event_end_s = 1 : length(ref_event_end_s_list)
-		[min_val, closest_row_idx] = min(abs(record2D_table.timestamp - ref_event_end_s_list(i_ref_event_end_s)));
-
-		% lets not spill into the next cycle...
-		if (closest_row_idx > triallog_table.trial_end_tick_idx(i_ref_event_end_s))
-			closest_row_idx = triallog_table.trial_end_tick_idx(i_ref_event_end_s);
-		end
-
-		ref_event_end_tick_idx_list(i_ref_event_end_s) = closest_row_idx;
-
-		if isnan(ref_event_start_tick_idx_list(i_ref_event_end_s)) || isnan(ref_event_end_tick_idx_list(i_ref_event_end_s))
-			fixID_in_ref_epoch = [];
-		else
-			fixID_in_ref_epoch = unique(record2D_table.A_binocular_eye_per_sample_fixID(ref_event_start_tick_idx_list(i_ref_event_end_s) : ref_event_end_tick_idx_list(i_ref_event_end_s)));
-		end
-		fixID_in_ref_epoch(fixID_in_ref_epoch == 0) = [];
-		fixID_in_ref_epoch_cell{i_ref_event_end_s} = fixID_in_ref_epoch;
-	end
-
-
-
 
 	% define trial_sets
 	dyadic_cycle_ldx = ismember(triallog_table.collection_type, {'joint', 'single'});
 	solo_cycle_ldx = ismember(triallog_table.collection_type, {'solo_0', 'solo_1'});
 	invalid_cycle_ldx = ismember(triallog_table.collection_type, {'None'});
 
-	% here we do not care about actual runs, but want to merge all trials
-	% per face position?
-	[unique_per_run_face_ROI_idx, ~, unique_per_run_face_ROI_idx_row_idx] = unique(per_run_face_ROI_idx, 'stable');
 
-	for i_unique_per_run_face_ROI = 1 : length(unique_per_run_face_ROI_idx)
-		cur_unique_per_run_face_ROI_idx = unique_per_run_face_ROI_idx(i_unique_per_run_face_ROI);
-		cur_src_run_ldx = unique_per_run_face_ROI_idx_row_idx == i_unique_per_run_face_ROI;
-		cur_src_run_idx_in_set = unique_src_run_idx(cur_src_run_ldx);
-		cur_src_run_set_cycle_ldx = ismember(triallog_table.src_run_idx, cur_src_run_idx_in_set);	% this excludes "bad/empty" cycles
 
-		cur_face_ROI_idx = cur_unique_per_run_face_ROI_idx;
-		cur_face_ROI_name = face_ROI.names{cur_face_ROI_idx};
-		cur_face_ROI_center_XY_pixel = face_ROI.center_XY_pixel(cur_face_ROI_idx, :);
-		cur_face_ROI_center_XY = face_ROI.center_XY(cur_face_ROI_idx, :);
 
-		cycle_sets.names = {'dyadic', 'solo'};
-		cycle_sets.set_ldx_list = {dyadic_cycle_ldx & cur_src_run_set_cycle_ldx, solo_cycle_ldx & cur_src_run_set_cycle_ldx};
+	if (show_2D_fixations)
+		% find relevant fixations around events
+		ref_event_col_stem_name = 'col_targ_initiate_reward'; % either tick_idx or start_s
+		gaze_epoch_duration_s = 2;
 
-		for i_cycle_sets = 1 : length(cycle_sets.names)
-			cur_set_name = cycle_sets.names{i_cycle_sets};
-			cur_cycles_in_set_ldx = cycle_sets.set_ldx_list{i_cycle_sets};
-			
+		ref_event_start_s_list = triallog_table.([ref_event_col_stem_name, '_start_s']);
+		ref_event_start_tick_idx_list = triallog_table.([ref_event_col_stem_name, '_tick_idx']);
+		ref_event_end_s_list = ref_event_start_s_list + gaze_epoch_duration_s;
+		ref_event_end_tick_idx_list = nan(size(ref_event_end_s_list));
 
-			% fixations in current set and ref_epoch
-			fixations_in_cur_set = fixID_in_ref_epoch_cell(cur_cycles_in_set_ldx);
-			cur_fixID_in_current_set_ldx = false(size(near_fixation_ldx));
-			for i_cycle = 1 : length(fixations_in_cur_set)
-				cur_fixIDs = fixations_in_cur_set{i_cycle};
-				cur_fixID_in_current_set_ldx(cur_fixIDs) = true;
+		fixID_in_ref_epoch_cell = cell(size(ref_event_end_tick_idx_list));
+		for i_ref_event_end_s = 1 : length(ref_event_end_s_list)
+			[min_val, closest_row_idx] = min(abs(record2D_table.timestamp - ref_event_end_s_list(i_ref_event_end_s)));
+
+			% lets not spill into the next cycle...
+			if (closest_row_idx > triallog_table.trial_end_tick_idx(i_ref_event_end_s))
+				closest_row_idx = triallog_table.trial_end_tick_idx(i_ref_event_end_s);
 			end
 
+			ref_event_end_tick_idx_list(i_ref_event_end_s) = closest_row_idx;
 
-			cur_fh = figure('Name', [proto_varname_session_id, ' Fixation position, partner ', cur_face_ROI_name, ' ', cur_set_name, ' trials around ', ref_event_col_stem_name]);
-			fixation_color = [10, 200, 10]/255;
-			coolbar = cool(256);
-			near_fix_color = coolbar(1, :);
-			far_fix_color = coolbar(end, :);
-			fixation_alpha = 0.1;
-			face_ROI_radius = 1/6;
-
-			hold on
-			plot([0 1 1 0 0], [0 0 1 1 0], 'Color', [0 0 0], 'LineWidth', 1, 'DisplayName', 'Playing field');
-			if ~paper_blocked
-				viscircles(cur_face_ROI_center_XY, face_ROI_radius, 'Color', [0.7 0.7 0.7]);	% , 'DisplayName', 'Partner''s face'
+			if isnan(ref_event_start_tick_idx_list(i_ref_event_end_s)) || isnan(ref_event_end_tick_idx_list(i_ref_event_end_s))
+				fixID_in_ref_epoch = [];
 			else
-				viscircles(cur_face_ROI_center_XY, face_ROI_radius, 'Color', [0.7 0.7 0.7], 'LineStyle', '--');
+				fixID_in_ref_epoch = unique(record2D_table.A_binocular_eye_per_sample_fixID(ref_event_start_tick_idx_list(i_ref_event_end_s) : ref_event_end_tick_idx_list(i_ref_event_end_s)));
 			end
+			fixID_in_ref_epoch(fixID_in_ref_epoch == 0) = [];
+			fixID_in_ref_epoch_cell{i_ref_event_end_s} = fixID_in_ref_epoch;
+		end
 
-			cur_fixation_ldx = cur_fixID_in_current_set_ldx & (near_fixation_ldx | far_fixation_ldx);
-			%scatter(fixations_struct.A_binocular_eye.mean_X_CCF(cur_fixation_ldx),
-			%fixations_struct.A_binocular_eye.mean_Y_CCF(cur_fixation_ldx), 'filled', 'SizeData', 15, 'MarkerEdgeColor', fixation_color, 'MarkerFaceColor', fixation_color, 'MarkerFaceAlpha', fixation_alpha, 'MarkerEdgeAlpha', fixation_alpha);
-			cur_fixation_ldx = cur_fixID_in_current_set_ldx & near_fixation_ldx;
-			scatter(fixations_struct.A_binocular_eye.mean_X_CCF(cur_fixation_ldx), fixations_struct.A_binocular_eye.mean_Y_CCF(cur_fixation_ldx), 'filled', 'DisplayName', 'near','SizeData', 15, 'MarkerEdgeColor', near_fix_color, 'MarkerFaceColor', near_fix_color, 'MarkerFaceAlpha', fixation_alpha, 'MarkerEdgeAlpha', fixation_alpha);
-			cur_fixation_ldx = cur_fixID_in_current_set_ldx & far_fixation_ldx;
-			scatter(fixations_struct.A_binocular_eye.mean_X_CCF(cur_fixation_ldx), fixations_struct.A_binocular_eye.mean_Y_CCF(cur_fixation_ldx), 'filled', 'DisplayName', 'far', 'SizeData', 15, 'MarkerEdgeColor', far_fix_color, 'MarkerFaceColor', far_fix_color, 'MarkerFaceAlpha', fixation_alpha, 'MarkerEdgeAlpha', fixation_alpha);
-			axis equal
-			hold off
-			cur_ah = gca();
 
-			xlabel(cur_ah,'Azimuth [relative]');
-			ylabel(cur_ah, 'Elevation [relative]')
-			title(cur_ah, ['Fixations near/far: ', proto_varname_session_id], 'Interpreter', 'none');
-			subtitle(cur_ah, ['Partner position: ', cur_face_ROI_name, ' ', cur_set_name, ' trials around ', ref_event_col_stem_name], 'Interpreter', 'none');
-			%legend('Location','southeast');
 
-			[matching_entry_ldx, non_matching_entry_ldx, matching_entry_idx] = fn_find_object_by_field_regexp( cur_ah.Children, 'Type', {'^scatter'});
+		% here we do not care about actual runs, but want to merge all trials
+		% per face position?
+		[unique_per_run_face_ROI_idx, ~, unique_per_run_face_ROI_idx_row_idx] = unique(per_run_face_ROI_idx, 'stable');
 
-			legend(cur_ah.Children(matching_entry_idx), 'Interpreter', 'none');
-			legend(cur_ah, 'Location', 'southeast', 'FontSize', plotting_options_struct.legendfontsize, 'Box', 'off', 'Interpreter', 'none');
-			cur_ah.Legend.ItemTokenSize=[10,15];	% reduce the length of the displayed line segment in the legend
+		for i_unique_per_run_face_ROI = 1 : length(unique_per_run_face_ROI_idx)
+			cur_unique_per_run_face_ROI_idx = unique_per_run_face_ROI_idx(i_unique_per_run_face_ROI);
+			cur_src_run_ldx = unique_per_run_face_ROI_idx_row_idx == i_unique_per_run_face_ROI;
+			cur_src_run_idx_in_set = unique_src_run_idx(cur_src_run_ldx);
+			cur_src_run_set_cycle_ldx = ismember(triallog_table.src_run_idx, cur_src_run_idx_in_set);	% this excludes "bad/empty" cycles
 
-			cur_out_FQN = fullfile(out_dir, 'per_session', [proto_varname_session_id, '.', cur_face_ROI_name, '.', cur_set_name, '.', ref_event_col_stem_name, '.pdf']);
-			disp(['Saving figure as: ', cur_out_FQN]);
-			write_out_figure(cur_fh, cur_out_FQN);
-		
+			cur_face_ROI_idx = cur_unique_per_run_face_ROI_idx;
+			cur_face_ROI_name = face_ROI.names{cur_face_ROI_idx};
+			cur_face_ROI_center_XY_pixel = face_ROI.center_XY_pixel(cur_face_ROI_idx, :);
+			cur_face_ROI_center_XY = face_ROI.center_XY(cur_face_ROI_idx, :);
+
+			cycle_sets.names = {'dyadic', 'solo'};
+			cycle_sets.set_ldx_list = {dyadic_cycle_ldx & cur_src_run_set_cycle_ldx, solo_cycle_ldx & cur_src_run_set_cycle_ldx};
+
+			for i_cycle_sets = 1 : length(cycle_sets.names)
+				cur_set_name = cycle_sets.names{i_cycle_sets};
+				cur_cycles_in_set_ldx = cycle_sets.set_ldx_list{i_cycle_sets};
+
+
+				% fixations in current set and ref_epoch
+				fixations_in_cur_set = fixID_in_ref_epoch_cell(cur_cycles_in_set_ldx);
+				cur_fixID_in_current_set_ldx = false(size(near_fixation_ldx));
+				for i_cycle = 1 : length(fixations_in_cur_set)
+					cur_fixIDs = fixations_in_cur_set{i_cycle};
+					cur_fixID_in_current_set_ldx(cur_fixIDs) = true;
+				end
+
+
+				cur_fh = figure('Name', [proto_varname_session_id, ' Fixation position, partner ', cur_face_ROI_name, ' ', cur_set_name, ' trials around ', ref_event_col_stem_name]);
+				fixation_color = [10, 200, 10]/255;
+				coolbar = cool(256);
+				near_fix_color = coolbar(1, :);
+				far_fix_color = coolbar(end, :);
+				fixation_alpha = 0.1;
+				face_ROI_radius = 1/6;
+
+				hold on
+				plot([0 1 1 0 0], [0 0 1 1 0], 'Color', [0 0 0], 'LineWidth', 1, 'DisplayName', 'Playing field');
+				if ~paper_blocked
+					viscircles(cur_face_ROI_center_XY, face_ROI_radius, 'Color', [0.7 0.7 0.7]);	% , 'DisplayName', 'Partner''s face'
+				else
+					viscircles(cur_face_ROI_center_XY, face_ROI_radius, 'Color', [0.7 0.7 0.7], 'LineStyle', '--');
+				end
+
+				cur_fixation_ldx = cur_fixID_in_current_set_ldx & (near_fixation_ldx | far_fixation_ldx);
+				%scatter(fixations_struct.A_binocular_eye.mean_X_CCF(cur_fixation_ldx),
+				%fixations_struct.A_binocular_eye.mean_Y_CCF(cur_fixation_ldx), 'filled', 'SizeData', 15, 'MarkerEdgeColor', fixation_color, 'MarkerFaceColor', fixation_color, 'MarkerFaceAlpha', fixation_alpha, 'MarkerEdgeAlpha', fixation_alpha);
+				cur_fixation_ldx = cur_fixID_in_current_set_ldx & near_fixation_ldx;
+				scatter(fixations_struct.A_binocular_eye.mean_X_CCF(cur_fixation_ldx), fixations_struct.A_binocular_eye.mean_Y_CCF(cur_fixation_ldx), 'filled', 'DisplayName', 'near','SizeData', 15, 'MarkerEdgeColor', near_fix_color, 'MarkerFaceColor', near_fix_color, 'MarkerFaceAlpha', fixation_alpha, 'MarkerEdgeAlpha', fixation_alpha);
+				cur_fixation_ldx = cur_fixID_in_current_set_ldx & far_fixation_ldx;
+				scatter(fixations_struct.A_binocular_eye.mean_X_CCF(cur_fixation_ldx), fixations_struct.A_binocular_eye.mean_Y_CCF(cur_fixation_ldx), 'filled', 'DisplayName', 'far', 'SizeData', 15, 'MarkerEdgeColor', far_fix_color, 'MarkerFaceColor', far_fix_color, 'MarkerFaceAlpha', fixation_alpha, 'MarkerEdgeAlpha', fixation_alpha);
+				axis equal
+				hold off
+				cur_ah = gca();
+
+				xlabel(cur_ah,'Azimuth [relative]');
+				ylabel(cur_ah, 'Elevation [relative]')
+				title(cur_ah, ['Fixations near/far: ', proto_varname_session_id], 'Interpreter', 'none');
+				subtitle(cur_ah, ['Partner position: ', cur_face_ROI_name, ' ', cur_set_name, ' trials around ', ref_event_col_stem_name], 'Interpreter', 'none');
+				%legend('Location','southeast');
+
+				[matching_entry_ldx, non_matching_entry_ldx, matching_entry_idx] = fn_find_object_by_field_regexp( cur_ah.Children, 'Type', {'^scatter'});
+
+				legend(cur_ah.Children(matching_entry_idx), 'Interpreter', 'none');
+				legend(cur_ah, 'Location', 'southeast', 'FontSize', plotting_options_struct.legendfontsize, 'Box', 'off', 'Interpreter', 'none');
+				cur_ah.Legend.ItemTokenSize=[10,15];	% reduce the length of the displayed line segment in the legend
+
+				cur_out_FQN = fullfile(out_dir, 'per_session', [proto_varname_session_id, '.', cur_face_ROI_name, '.', cur_set_name, '.', ref_event_col_stem_name, '.pdf']);
+				disp(['Saving figure as: ', cur_out_FQN]);
+				write_out_figure(cur_fh, cur_out_FQN);
+
+			end
 		end
 	end
 
-	
 	%separtely collection types for dyadic/single and solo_0/solo_1, exclude 'None'
 
 
