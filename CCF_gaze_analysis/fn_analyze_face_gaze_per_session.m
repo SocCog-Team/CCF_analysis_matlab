@@ -4,7 +4,8 @@ function [] = fn_analyze_face_gaze_per_session(cur_CCF_runfolder_FQN_list)
 
 % TODO:
 %	add distance betwenn gaze and agents and aims to record2D
-
+%	 change to one row per stateXcycle and vergence type add the cycle
+%	 number and state name to the table, as well as the vergence type
 
 timestamps.(mfilename).start = tic;
 disp(['Starting: ', mfilename]);
@@ -102,7 +103,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 	[~, proto_varname_session_id, tmp_ext] = fileparts(cur_CCF_runfolder_FQN);
 	if ~strcmp(tmp_ext, '.sessiondir')
-		error([mfilename, ': WARN: session folder dies not end in .sessiondir...']);
+		error([mfilename, ': WARN: session folder does not end in .sessiondir...']);
 	end
 	varname_session_id = fn_sanitize_value_as_matlab_variable_name(proto_varname_session_id, 1 ,1);
 	timestamps.(mfilename).(varname_session_id).start = tic;
@@ -122,6 +123,57 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	% clean up triallog_table
 	triallog_table_remove_row_ldx = ismember(triallog_table.col_targ_id_name, {'None'}) | isnan(triallog_table.col_targ_IDX) | ismember(triallog_table.collection_type, {'None'});
 	triallog_table(triallog_table_remove_row_ldx, :) = [];
+
+	record2D_colname_list = record2D_table.Properties.VariableNames;
+
+	% the number of aims in a run is not fixed, so detect it...
+	aim_prefix_list ={};
+	for i_col = 1 : length(record2D_colname_list)
+		cur_col_name = record2D_colname_list{i_col};
+		cur_aim_prefix_cell = regexp(cur_col_name, '^aims\d*', 'match');
+		if ~isempty(cur_aim_prefix_cell)
+			aim_prefix_list = [aim_prefix_list, cur_aim_prefix_cell{1}];
+		end
+	end
+	aim_prefix_list = unique(aim_prefix_list);
+
+
+	% the number of agents in a run is not fixed, so detect it...
+	agent_prefix_list = {};
+	for i_col = 1 : length(record2D_colname_list)
+		cur_col_name = record2D_colname_list{i_col};
+		cur_agent_prefix_cell = regexp(cur_col_name, '^agent\d*', 'match');
+		if ~isempty(cur_agent_prefix_cell)
+			agent_prefix_list = [agent_prefix_list, cur_agent_prefix_cell{1}];
+		end
+	end
+	agent_prefix_list = unique(agent_prefix_list);
+
+
+
+	% the number of targets in a run is not fixed, so detect it...
+	target_prefix_list = {};
+	for i_col = 1 : length(record2D_colname_list)
+		cur_col_name = record2D_colname_list{i_col};
+		cur_target_prefix_cell = regexp(cur_col_name, '^target\d*', 'match');
+		if ~isempty(cur_target_prefix_cell)
+			target_prefix_list = [target_prefix_list, cur_target_prefix_cell{1}];
+		end
+	end
+	target_prefix_list = unique(target_prefix_list);
+
+
+	% the number of targets in a run is not fixed, so detect it...
+	eye_prefix_list = {};
+	for i_col = 1 : length(record2D_colname_list)
+		cur_col_name = record2D_colname_list{i_col};
+		cur_eye_prefix_cell = regexp(cur_col_name, '^[A|B]_(right|left|binocular)_eye', 'match');
+		if ~isempty(cur_eye_prefix_cell)
+			eye_prefix_list = [eye_prefix_list, cur_eye_prefix_cell{1}];
+		end
+	end
+	eye_prefix_list = unique(eye_prefix_list);
+
 
 
 
@@ -187,8 +239,11 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	switch proto_varname_session_id
 		case '20260423TNNNNNNM.A_Elmo.B_MIXED.SCP_01'
 			paper_blocked = 1;
+			per_run_face_ROI_idx = repmat(find(ismember(face_ROI.names, {'facecenter'})), n_src_runs, 1);
+
 		case '20260424TNNNNNNM.A_Elmo.B_MIXED.SCP_01'
 			paper_blocked = 1;
+			per_run_face_ROI_idx = repmat(find(ismember(face_ROI.names, {'facecenter'})), n_src_runs, 1);
 
 		case '20260428TNNNNNNM.A_Elmo.B_MIXED.SCP_01'
 			per_run_face_ROI_idx = repmat(find(ismember(face_ROI.names, {'face_right'})), n_src_runs, 1);
@@ -197,13 +252,14 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			per_run_face_ROI_idx = repmat(find(ismember(face_ROI.names, {'face_right'})), n_src_runs, 1);
 
 		case '20260430TNNNNNNM.A_Elmo.B_MIXED.SCP_01'
-			per_run_face_ROI_idx = [find(ismember(face_ROI.names, {'face_right'})); find(ismember(face_ROI.names, {'facecenter'}))];
+			per_run_face_ROI_idx = [find(ismember(face_ROI.names, {'face_right'})); find(ismember(face_ROI.names, {'facecenter'})); find(ismember(face_ROI.names, {'facecenter'}))];
 
 		case '20260501TNNNNNNM.A_Elmo.B_MIXED.SCP_01'
-			per_run_face_ROI_idx = [find(ismember(face_ROI.names, {'face_right'})); find(ismember(face_ROI.names, {'face_left'}))];
+			per_run_face_ROI_idx = [find(ismember(face_ROI.names, {'face_right'})); find(ismember(face_ROI.names, {'face_left'})); find(ismember(face_ROI.names, {'facecenter'}))];
 
 		otherwise
 			% assume the partner normally sits opposite to the monkey...
+			% note we default to facecenter even for solo right now
 			per_run_face_ROI_idx = repmat(find(ismember(face_ROI.names, {'facecenter'})), n_src_runs, 1);
 	end
 
@@ -211,11 +267,11 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	% now add the partner face center positpion and paper_block information
 	% to the triallog_table and record2D_table
 	% TODO also add A_s face position
-	record2D_table.B_face_center_X = face_ROI.center_XY(per_run_face_ROI_idx(record2D_table.run_idx + 1), 1);
-	record2D_table.B_face_center_Y = face_ROI.center_XY(per_run_face_ROI_idx(record2D_table.run_idx + 1), 2);
+	record2D_table.B_facecenter_X = face_ROI.center_XY(per_run_face_ROI_idx(record2D_table.run_idx + 1), 1);
+	record2D_table.B_facecenter_Y = face_ROI.center_XY(per_run_face_ROI_idx(record2D_table.run_idx + 1), 2);
 	record2D_table.paper_blocked = zeros([size(record2D_table, 1) 1]) + paper_blocked;	% TODO change to per run parameter?
 
-	triallog_table.B_face_center_XY = face_ROI.center_XY(per_run_face_ROI_idx(triallog_table.src_run_idx), :);
+	triallog_table.B_facecenter_XY = face_ROI.center_XY(per_run_face_ROI_idx(triallog_table.src_run_idx), :);
 	triallog_table.paper_blocked = zeros([size(triallog_table, 1) 1]) + paper_blocked;	% TODO change to per run parameter?
 
 
@@ -229,6 +285,14 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	mean_dX_CCF_threshold = 0.05;	%(values smaller near fixation, values larger far fixations)
 	near_fixation_ldx = fixations_struct.A_binocular_eye.mean_dX_CCF <= mean_dX_CCF_threshold;
 	far_fixation_ldx = fixations_struct.A_binocular_eye.mean_dX_CCF > mean_dX_CCF_threshold;
+
+	% sample based
+	min_gaze_confidence = 0.85;%
+	gaze_src_col_name_stem = 'A_binocular_eye';
+	valid_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_confidence']) >= min_gaze_confidence;
+	near_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_dX']) <= mean_dX_CCF_threshold;
+	far_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_dX']) > mean_dX_CCF_threshold;
+
 
 
 	% TODO iterate over epochs:
@@ -269,44 +333,273 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	target_state_start_name_list = triallog_table.Properties.VariableNames(target_state_start_col_ldx);
 	target_state_end_name_list = triallog_table.Properties.VariableNames(target_state_end_col_ldx);
 	target_state_name_list = regexprep(target_state_start_name_list, '_tick_idx', '');
+	additional_state_name_list = {'Acquisition'};	% these do not map fully onto target states
+	additional_state_start_tick_idx_col_name_list = {'PDD_onset_tick_idx'};
+	additional_state_end_col_tick_idx_name_list = {'collecting_by_agent_start_tick_idx'};
 
-	n_states = length(target_state_name_list);
+	all_epoch_name_list = [target_state_name_list, additional_state_name_list];
+
+	n_states = length(target_state_name_list) + length(additional_state_name_list);
 	% use this to pick the per state valid samples
 	per_state_valid_tick_idx_ldx_array = false([size(triallog_table, 1), n_states]);
+	per_state_valid_tick_idx_per_cycle_idx_array = zeros([size(triallog_table, 1), n_states]);
 
 
-	for i_target_state = 1 : length(target_state_name_list)
-		cur_target_state = target_state_name_list{i_target_state};
+	reference_object_position_stem_list = [aim_prefix_list, agent_prefix_list, target_prefix_list, 'B_facecenter'];
+	% we want/need to test for each samp;le whether it is close
+	% enough to any object to be cpunted as on that object
+	% for now do not assign things exclusively (by picking the closest if multiple objects qualify)
+	reference_object_position_stem_closeness_threshold_list = [zeros(size(aim_prefix_list)) + 0.1, zeros(size(agent_prefix_list)) + conf_struct.agent_radius*3, zeros(size(target_prefix_list)) + conf_struct.target_radius*3, 1/7];
 
-		cur_target_state_start_tick_idx_list = triallog_table.([cur_target_state, '_tick_idx']);
-		cur_target_state_end_tick_idx_list = triallog_table.([cur_target_state, '_end_tick_idx']);
+	template_per_trial_ref_object_table = table;
+	ref_data_col = nan(size(triallog_table.collection_num));
+	for i_ref_object = 1 : length(reference_object_position_stem_list)
+		prefix = [];
+		suffix = [];
+		cur_object_name = [prefix, gaze_src_col_name_stem, '_on_', reference_object_position_stem_list{i_ref_object}, suffix];
+		template_per_trial_ref_object_table.(cur_object_name) = ref_data_col;
+	end
 
-		for i_cycle = 1 : length(cur_target_state_start_tick_idx_list)
-			% exclude bad cycles
-			cur_target_state_start_tick_idx = cur_target_state_start_tick_idx_list(i_cycle);
-			cur_target_state_end_tick_idx = cur_target_state_end_tick_idx_list(i_cycle);
-			cur_cycle_state_duration_nticks = cur_target_state_end_tick_idx - cur_target_state_start_tick_idx;
 
-			if isnan(cur_target_state_start_tick_idx) || isnan(cur_target_state_end_tick_idx) || (cur_target_state_start_tick_idx == 0) || (cur_target_state_end_tick_idx == 0)
-				disp([mfilename, ': INFO: excluded cycle (', cur_target_state,'): ', num2str(i_cycle)]);
+	per_cycleXstate_proportion_table = [];
+	per_cycleXstate_count_table = [];
+
+	timestamps.(mfilename).per_cycle_proportion_count_loop.start = tic;
+	all_false_tick_ldx = false([size(record2D_table, 1), 1]);
+
+	version_string = 'v.003';
+	target_state_exclusion_list = {'col_targ_initiate_reward'};
+
+
+
+	GazePropCount_subhash_list = { ...
+		DataHash(version_string), ...						% if the record2D data changed, play it save and recompute things
+		DataHash(target_state_exclusion_list), ...
+		DataHash(additional_state_name_list), ...
+		DataHash(additional_state_start_tick_idx_col_name_list), ...
+		DataHash(additional_state_end_col_tick_idx_name_list), ...
+		DataHash(triallog_table), ...
+		DataHash(record2D_table), ...
+		DataHash(reference_object_position_stem_list),...
+		};
+	% hash of hashes...
+	GazePropCount_hash = DataHash(GazePropCount_subhash_list);
+	GazePropCount_cache_FQN = fullfile(out_dir, ['GazePropCount_cache_', proto_varname_session_id, '_', GazePropCount_hash, '.mat']);
+
+	redo_GazePropCount_cache = 0;
+	if isfile(GazePropCount_cache_FQN) && ~(redo_GazePropCount_cache)
+		% load this
+		disp([mfilename, ': INFO: loading GazePropCount_cache_FQN from cache: ', GazePropCount_cache_FQN]);
+		load(GazePropCount_cache_FQN, 'per_cycleXstate_proportion_table', 'per_cycleXstate_count_table', 'per_state_valid_tick_idx_per_cycle_idx_array', 'per_state_valid_tick_idx_ldx_array');
+	else
+
+
+
+		for i_target_state = 1 : length(all_epoch_name_list)
+			cur_target_state = all_epoch_name_list{i_target_state};
+			disp([mfilename, ': INFO: Processing: ', cur_target_state]);
+
+			if ismember({cur_target_state}, target_state_exclusion_list)
+				disp([mfilename, ': INFO: current cur_target_state on exclusion list, skipping: ', cur_target_state]);
 				continue
 			end
 
-			% this can be used for 2D plots...
-			per_state_valid_tick_idx_ldx_array(cur_target_state_start_tick_idx:cur_target_state_end_tick_idx, i_target_state) = true;
-
-			% now figure out the per stateXcycle fixation percentages on
-			% the
+			cur_per_cycleXstate_proportion_table = [];
+			cur_per_cycleXstate_count_table = [];
 
 
+			if ismember({cur_target_state}, target_state_name_list)
+				cur_target_state_start_tick_idx_list = triallog_table.([cur_target_state, '_tick_idx']);
+				cur_target_state_end_tick_idx_list = triallog_table.([cur_target_state, '_end_tick_idx']);
+			else
+				cur_additional_epoch_name_ldx = ismember(additional_state_name_list, {cur_target_state});
+				cur_target_state_start_tick_idx_list = triallog_table.(additional_state_start_tick_idx_col_name_list{cur_additional_epoch_name_ldx});
+				cur_target_state_end_tick_idx_list = triallog_table.(additional_state_end_col_tick_idx_name_list{cur_additional_epoch_name_ldx});
+			end
+
+			for i_cycle = 1 : length(cur_target_state_start_tick_idx_list)
+				% exclude bad cycles
+				cur_target_state_start_tick_idx = cur_target_state_start_tick_idx_list(i_cycle);
+				cur_target_state_end_tick_idx = cur_target_state_end_tick_idx_list(i_cycle);
+				cur_cycle_state_duration_nticks = cur_target_state_end_tick_idx - cur_target_state_start_tick_idx;
+
+				if isnan(cur_target_state_start_tick_idx) || isnan(cur_target_state_end_tick_idx) || (cur_target_state_start_tick_idx == 0) || (cur_target_state_end_tick_idx == 0)
+					disp([mfilename, ': INFO: excluded cycle (', cur_target_state,'): ', num2str(i_cycle)]);
+					continue
+				end
+				cur_target_stateXcycle_tick_ldx = all_false_tick_ldx;
+				cur_target_stateXcycle_tick_ldx(cur_target_state_start_tick_idx:cur_target_state_end_tick_idx) = true;
+
+
+				% this can be used for 2D plots... to exclude specific cycles
+				% and
+
+				per_state_valid_tick_idx_ldx_array(cur_target_state_start_tick_idx:cur_target_state_end_tick_idx, i_target_state) = true;
+				per_state_valid_tick_idx_per_cycle_idx_array(cur_target_state_start_tick_idx:cur_target_state_end_tick_idx, i_target_state) = triallog_table.trial_num(i_cycle);
+
+
+				% now figure out the per stateXcycle fixation percentages on
+				% the different objects per trial, also for different gaze
+				% sample types (near and far...
+
+				cur_cycle_valid_gaze_tick_ldx = cur_target_stateXcycle_tick_ldx & valid_gaze_sample_ldx;	% let"s exclude untrustworthy gaze samples...
+
+				% list of things to compare with... directly use distance
+				% columns?
+
+				% use column names that just need
+				% reference_object_position_stem_list = [aim_prefix_list, agent_prefix_list, target_prefix_list, 'B_facecenter'];
+				% % we want/need to test for each samp;le whether it is close
+				% % enough to any object to be cpunted as on that object
+				% % for now do not assign things exclusively (by picking the closest if multiple objects qualify)
+				% reference_object_position_stem_closeness_threshold_list = [zeros(size(aim_prefix_list)) + 0.1, zeros(size(agent_prefix_list)) + conf_struct.agent_radius*3, zeros(size(target_prefix_list)) + conf_struct.target_radius*3, 1/7];
+				cur_vergence_subset_string = 'allFix';
+				[all_proportion_on_object_list, all_count_on_object_list, all_total_sample_count, all_object_name_list] = fn_calculate_gaze_sample_proportions_per_object(record2D_table(cur_cycle_valid_gaze_tick_ldx, :), gaze_src_col_name_stem, reference_object_position_stem_list, reference_object_position_stem_closeness_threshold_list, [cur_target_state, '_', cur_vergence_subset_string, '_'], []);
+
+				cur_vergence_subset_string = 'nearFix';
+				[near_proportion_on_object_list, near_count_on_object_list, near_total_sample_count, near_object_name_list] = fn_calculate_gaze_sample_proportions_per_object(record2D_table(cur_cycle_valid_gaze_tick_ldx & near_gaze_sample_ldx, :), gaze_src_col_name_stem, reference_object_position_stem_list, reference_object_position_stem_closeness_threshold_list, [cur_target_state, '_', cur_vergence_subset_string, '_'], []);
+
+				cur_vergence_subset_string = 'farFix';
+				[far_proportion_on_object_list, far_count_on_object_list, far_total_sample_count, far_object_name_list] = fn_calculate_gaze_sample_proportions_per_object(record2D_table(cur_cycle_valid_gaze_tick_ldx & far_gaze_sample_ldx, :), gaze_src_col_name_stem, reference_object_position_stem_list, reference_object_position_stem_closeness_threshold_list, [cur_target_state, '_', cur_vergence_subset_string, '_'], []);
+
+				proportion_on_object_list = [all_proportion_on_object_list; near_proportion_on_object_list; far_proportion_on_object_list];
+				prop_object_name_list = [all_object_name_list, near_object_name_list, far_object_name_list];
+
+
+				count_on_object_list = [all_count_on_object_list; all_total_sample_count; near_count_on_object_list; near_total_sample_count; far_count_on_object_list; far_total_sample_count];
+				count_object_name_list = [all_object_name_list, [prefix, cur_target_state, '_', 'allFix', '_total', suffix], near_object_name_list, [prefix, cur_target_state, '_', 'nearFix', '_total', suffix], far_object_name_list, [prefix, cur_target_state, '_', 'farFix', '_total', suffix]];
+
+				if isempty(cur_per_cycleXstate_proportion_table)
+					%cur_per_cycleXstate_proportion_table = template_per_trial_ref_object_table;
+					cur_per_cycleXstate_proportion_table = table;
+					cur_prefix = 'Prop_';
+					cur_suffix = [];
+					short_object_name_list = fn_shorten_object_name_list(prop_object_name_list, prefix, suffix);
+					for i_ref_object = 1 : length(short_object_name_list)
+						prefix = [];
+						suffix = [];
+						cur_object_name = short_object_name_list{i_ref_object};
+						cur_per_cycleXstate_proportion_table.(cur_object_name) = ref_data_col;
+					end
+					%short_object_name_list = fn_shorten_object_name_list(object_name_list, prefix, suffix);
+					cur_per_cycleXstate_proportion_table = renamevars(cur_per_cycleXstate_proportion_table, cur_per_cycleXstate_proportion_table.Properties.VariableNames, short_object_name_list);
+					cur_per_cycleXstate_proportion_table.cycle = nan(size(ref_data_col));
+				end
+				cur_per_cycleXstate_proportion_table.cycle(i_cycle) = triallog_table.trial_num(i_cycle);
+				cur_per_cycleXstate_proportion_table(i_cycle, 1:end-1) = array2table(proportion_on_object_list');
+
+				if isempty(cur_per_cycleXstate_count_table)
+					%cur_per_cycleXstate_count_table = template_per_trial_ref_object_table;
+					cur_per_cycleXstate_count_table = table;
+					cur_prefix = 'Count_';
+					cur_suffix = [];
+					short_object_name_list = fn_shorten_object_name_list(count_object_name_list, prefix, suffix);
+					for i_ref_object = 1 : length(short_object_name_list)
+						prefix = [];
+						suffix = [];
+						cur_object_name = short_object_name_list{i_ref_object};
+						cur_per_cycleXstate_count_table.(cur_object_name) = ref_data_col;
+					end
+					%short_object_name_list = fn_shorten_object_name_list(object_name_list, prefix, suffix);
+					cur_per_cycleXstate_count_table = renamevars(cur_per_cycleXstate_count_table, cur_per_cycleXstate_count_table.Properties.VariableNames, short_object_name_list);
+					cur_per_cycleXstate_proportion_table.cycle = nan(size(ref_data_col));
+					%short_object_name_list = fn_shorten_object_name_list({[cur_target_state, '_', cur_vergence_subset_string, '_total']}, prefix, suffix);
+					%cur_per_cycleXstate_count_table.(short_object_name_list{1}) = ref_data_col;
+				end
+				cur_per_cycleXstate_count_table.cycle(i_cycle) = triallog_table.trial_num(i_cycle);
+				cur_per_cycleXstate_count_table(i_cycle, 1:end-1) = array2table(count_on_object_list');
+
+				% if isempty(cur_per_cycleXstate_count_table)
+				% 	cur_per_cycleXstate_count_table = template_per_trial_ref_object_table;
+				% 	cur_prefix = 'Count_';
+				% 	cur_suffix = [];
+				% 	short_object_name_list = fn_shorten_object_name_list(object_name_list, prefix, suffix);
+				% 	cur_per_cycleXstate_count_table = renamevars(cur_per_cycleXstate_count_table, cur_per_cycleXstate_count_table.Properties.VariableNames, short_object_name_list);
+				% 	short_object_name_list = fn_shorten_object_name_list({[cur_target_state, '_', cur_vergence_subset_string, '_total']}, prefix, suffix);
+				% 	cur_per_cycleXstate_count_table.(short_object_name_list{1}) = ref_data_col;
+				% end
+				%
+				% cur_per_cycleXstate_count_table(i_cycle, :) = array2table([count_on_object_list', total_sample_count]);
+			end
+
+			% now concatenate for all states
+			if isempty(per_cycleXstate_proportion_table)
+				per_cycleXstate_proportion_table = cur_per_cycleXstate_proportion_table;
+			else
+				cur_per_cycleXstate_proportion_table = removevars(cur_per_cycleXstate_proportion_table, 'cycle');
+				per_cycleXstate_proportion_table = [per_cycleXstate_proportion_table, cur_per_cycleXstate_proportion_table];
+			end
+
+			if isempty(per_cycleXstate_count_table)
+				per_cycleXstate_count_table = cur_per_cycleXstate_count_table;
+			else
+				cur_per_cycleXstate_count_table = removevars(cur_per_cycleXstate_count_table, 'cycle');
+				per_cycleXstate_count_table = [per_cycleXstate_count_table, cur_per_cycleXstate_count_table];
+			end
 
 		end
+
+		% delete existing cache files to avoid these lingering around
+		cache_wildcard_dir_string = regexprep(GazePropCount_cache_FQN, GazePropCount_hash, '*');	% construct the dir wildcard string
+		existing_GazePropCount_cache_FQN_dirstruct = dir(cache_wildcard_dir_string);
+		for i_tmp_cache_FQN = 1 : length(existing_GazePropCount_cache_FQN_dirstruct)
+			delete(fullfile(existing_GazePropCount_cache_FQN_dirstruct(i_tmp_cache_FQN).folder, existing_GazePropCount_cache_FQN_dirstruct(i_tmp_cache_FQN).name));
+		end
+		%  save record2D_table and fixations_struct
+		disp([mfilename, ': INFO: saving existing_GazePropCount_cache as cache: ', GazePropCount_cache_FQN]);
+		save(GazePropCount_cache_FQN, 'per_cycleXstate_proportion_table', 'per_cycleXstate_count_table', 'per_state_valid_tick_idx_per_cycle_idx_array', 'per_state_valid_tick_idx_ldx_array');
 	end
+
+
+	cur_duration_s = toc(timestamps.(mfilename).per_cycle_proportion_count_loop.start);
+	disp([mfilename, ': Collecting per cycle and state gaze proportions took: ', num2str(cur_duration_s), ' seconds (', num2str(floor(cur_duration_s/(60*60))), ' hours ', num2str(floor(mod(cur_duration_s, 3600)/60)), ' minutes ', num2str(mod(cur_duration_s, 60)), ' seconds).']);
+
+
+	% just pre process all
+	%continue
+
 
 	% define trial_sets
 	dyadic_cycle_ldx = ismember(triallog_table.collection_type, {'joint', 'single'});
 	solo_cycle_ldx = ismember(triallog_table.collection_type, {'solo_0', 'solo_1'});
 	invalid_cycle_ldx = ismember(triallog_table.collection_type, {'None'});
+	valid_cycle_ldx = ~invalid_cycle_ldx & ~exclude_cycle_ldx;
+
+
+	% plot far fixations and proportions of samples for dyadic
+
+	plot_2d_and_object_proportions = 1;
+	if (plot_2d_and_object_proportions)
+
+		plot_set_ldx_list = {dyadic_cycle_ldx, solo_cycle_ldx};
+		plot_set_name_list = {'dyadic', 'solo'};
+
+		% which epochs to show in which sequence
+		epoch_list = {'Acquisition', 'CTS_collecting', 'CTS_rewarding', 'CTS_pre_acquisition'};
+		vergence_list = {'farFix'};
+
+		for i_plot = 1 : length(plot_set_ldx_list)
+			cur_plot_set_name = plot_set_name_list{i_plot};
+			cur_plot_set_ldx = plot_set_ldx_list{i_plot};
+
+		%[cur_target_state, '_', cur_vergence_subset_string, '_']
+			% use this for columns
+			for i_epoch = 1 : length(epoch_list)
+				cur_epoch = epoch_list{i_epoch};
+				%cur_epoch_ldx = 
+
+
+				% use vergence
+				for i_vergence = 1 : length(vergence_list)
+					cur_vergence =  vergence_list{i_vergence};
+			
+
+
+				end
+			end
+		end
+	end
+
 
 
 
