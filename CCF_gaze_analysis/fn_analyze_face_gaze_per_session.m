@@ -43,6 +43,10 @@ end
 
 out_dir = fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', 'CCF', 'GAZE_ANALYSIS');
 plotting_options_struct = fn_BoS_ephys_default_plotting_options;
+% overrides
+plotting_options_struct.format_string_list = {'.png', '.fig'};
+
+
 
 if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_list)
 	cur_CCF_runfolder_FQN_list = { ...
@@ -67,8 +71,9 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 		};
 
 	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
-	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(6:end); % clear up to 7
+%	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(6:end); % clear up to 7
 	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
+	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(6:end); % clear up to 7
 
 	only_process_gaze_calibration = 0;
 	if (only_process_gaze_calibration)
@@ -105,6 +110,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	if ~strcmp(tmp_ext, '.sessiondir')
 		error([mfilename, ': WARN: session folder does not end in .sessiondir...']);
 	end
+	cur_sessionID = proto_varname_session_id;
 	varname_session_id = fn_sanitize_value_as_matlab_variable_name(proto_varname_session_id, 1 ,1);
 	timestamps.(mfilename).(varname_session_id).start = tic;
 
@@ -123,6 +129,11 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	% clean up triallog_table
 	triallog_table_remove_row_ldx = ismember(triallog_table.col_targ_id_name, {'None'}) | isnan(triallog_table.col_targ_IDX) | ismember(triallog_table.collection_type, {'None'});
 	triallog_table(triallog_table_remove_row_ldx, :) = [];
+
+	% this should ideally be added in the parsing function...
+	if ~ismember({'sessionID'}, triallog_table.Properties.VariableNames)
+		triallog_table.sessionID = repmat({cur_sessionID}, size(triallog_table, 1), 1);
+	end
 
 	record2D_colname_list = record2D_table.Properties.VariableNames;
 
@@ -338,11 +349,13 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	additional_state_end_col_tick_idx_name_list = {'collecting_by_agent_start_tick_idx'};
 
 	all_epoch_name_list = [target_state_name_list, additional_state_name_list];
+	short_all_epoch_name_list = fn_shorten_object_name_list(all_epoch_name_list);
+
 
 	n_states = length(target_state_name_list) + length(additional_state_name_list);
 	% use this to pick the per state valid samples
-	per_state_valid_tick_idx_ldx_array = false([size(triallog_table, 1), n_states]);
-	per_state_valid_tick_idx_per_cycle_idx_array = zeros([size(triallog_table, 1), n_states]);
+	per_state_valid_tick_idx_ldx_array = false([size(record2D_table, 1), n_states]);
+	per_state_valid_tick_idx_per_cycle_idx_array = zeros([size(record2D_table, 1), n_states]);
 
 
 	reference_object_position_stem_list = [aim_prefix_list, agent_prefix_list, target_prefix_list, 'B_facecenter'];
@@ -367,7 +380,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	timestamps.(mfilename).per_cycle_proportion_count_loop.start = tic;
 	all_false_tick_ldx = false([size(record2D_table, 1), 1]);
 
-	version_string = 'v.003';
+	version_string = 'v.004';
 	target_state_exclusion_list = {'col_targ_initiate_reward'};
 
 
@@ -390,13 +403,16 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	if isfile(GazePropCount_cache_FQN) && ~(redo_GazePropCount_cache)
 		% load this
 		disp([mfilename, ': INFO: loading GazePropCount_cache_FQN from cache: ', GazePropCount_cache_FQN]);
-		load(GazePropCount_cache_FQN, 'per_cycleXstate_proportion_table', 'per_cycleXstate_count_table', 'per_state_valid_tick_idx_per_cycle_idx_array', 'per_state_valid_tick_idx_ldx_array');
+		load(GazePropCount_cache_FQN, 'gaze_on_object_prop_count_table', 'per_state_valid_tick_idx_per_cycle_idx_array', 'per_state_valid_tick_idx_ldx_array');
 	else
 
 
+		% accumulate as struct, later convert to table 
+		gaze_on_object_prop_count_struct = [];
 
 		for i_target_state = 1 : length(all_epoch_name_list)
 			cur_target_state = all_epoch_name_list{i_target_state};
+			cur_epoch_name = cur_target_state;
 			disp([mfilename, ': INFO: Processing: ', cur_target_state]);
 
 			if ismember({cur_target_state}, target_state_exclusion_list)
@@ -453,91 +469,40 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 				% % enough to any object to be cpunted as on that object
 				% % for now do not assign things exclusively (by picking the closest if multiple objects qualify)
 				% reference_object_position_stem_closeness_threshold_list = [zeros(size(aim_prefix_list)) + 0.1, zeros(size(agent_prefix_list)) + conf_struct.agent_radius*3, zeros(size(target_prefix_list)) + conf_struct.target_radius*3, 1/7];
-				cur_vergence_subset_string = 'allFix';
-				[all_proportion_on_object_list, all_count_on_object_list, all_total_sample_count, all_object_name_list] = fn_calculate_gaze_sample_proportions_per_object(record2D_table(cur_cycle_valid_gaze_tick_ldx, :), gaze_src_col_name_stem, reference_object_position_stem_list, reference_object_position_stem_closeness_threshold_list, [cur_target_state, '_', cur_vergence_subset_string, '_'], []);
 
-				cur_vergence_subset_string = 'nearFix';
-				[near_proportion_on_object_list, near_count_on_object_list, near_total_sample_count, near_object_name_list] = fn_calculate_gaze_sample_proportions_per_object(record2D_table(cur_cycle_valid_gaze_tick_ldx & near_gaze_sample_ldx, :), gaze_src_col_name_stem, reference_object_position_stem_list, reference_object_position_stem_closeness_threshold_list, [cur_target_state, '_', cur_vergence_subset_string, '_'], []);
+				cur_vergence_subset_string = 'allFixations';
+				cur_gaze_samples_on_object_struct = fn_calculate_gaze_sample_count_and_proportions_per_object(record2D_table(cur_cycle_valid_gaze_tick_ldx, :), gaze_src_col_name_stem, reference_object_position_stem_list, reference_object_position_stem_closeness_threshold_list, [], []);
+				cur_gaze_samples_on_object_struct.cycle = triallog_table.trial_num(i_cycle);
+				cur_gaze_samples_on_object_struct.sessionID = cur_sessionID;
+				cur_gaze_samples_on_object_struct.epoch = fn_shorten_object_name_list(cur_epoch_name, [], []);
+				cur_gaze_samples_on_object_struct.vergence = cur_vergence_subset_string;
 
-				cur_vergence_subset_string = 'farFix';
-				[far_proportion_on_object_list, far_count_on_object_list, far_total_sample_count, far_object_name_list] = fn_calculate_gaze_sample_proportions_per_object(record2D_table(cur_cycle_valid_gaze_tick_ldx & far_gaze_sample_ldx, :), gaze_src_col_name_stem, reference_object_position_stem_list, reference_object_position_stem_closeness_threshold_list, [cur_target_state, '_', cur_vergence_subset_string, '_'], []);
-
-				proportion_on_object_list = [all_proportion_on_object_list; near_proportion_on_object_list; far_proportion_on_object_list];
-				prop_object_name_list = [all_object_name_list, near_object_name_list, far_object_name_list];
-
-
-				count_on_object_list = [all_count_on_object_list; all_total_sample_count; near_count_on_object_list; near_total_sample_count; far_count_on_object_list; far_total_sample_count];
-				count_object_name_list = [all_object_name_list, [prefix, cur_target_state, '_', 'allFix', '_total', suffix], near_object_name_list, [prefix, cur_target_state, '_', 'nearFix', '_total', suffix], far_object_name_list, [prefix, cur_target_state, '_', 'farFix', '_total', suffix]];
-
-				if isempty(cur_per_cycleXstate_proportion_table)
-					%cur_per_cycleXstate_proportion_table = template_per_trial_ref_object_table;
-					cur_per_cycleXstate_proportion_table = table;
-					cur_prefix = 'Prop_';
-					cur_suffix = [];
-					short_object_name_list = fn_shorten_object_name_list(prop_object_name_list, prefix, suffix);
-					for i_ref_object = 1 : length(short_object_name_list)
-						prefix = [];
-						suffix = [];
-						cur_object_name = short_object_name_list{i_ref_object};
-						cur_per_cycleXstate_proportion_table.(cur_object_name) = ref_data_col;
-					end
-					%short_object_name_list = fn_shorten_object_name_list(object_name_list, prefix, suffix);
-					cur_per_cycleXstate_proportion_table = renamevars(cur_per_cycleXstate_proportion_table, cur_per_cycleXstate_proportion_table.Properties.VariableNames, short_object_name_list);
-					cur_per_cycleXstate_proportion_table.cycle = nan(size(ref_data_col));
+				if isempty(gaze_on_object_prop_count_struct)
+					gaze_on_object_prop_count_struct = cur_gaze_samples_on_object_struct;
+				else
+					gaze_on_object_prop_count_struct(end+1) = cur_gaze_samples_on_object_struct;
 				end
-				cur_per_cycleXstate_proportion_table.cycle(i_cycle) = triallog_table.trial_num(i_cycle);
-				cur_per_cycleXstate_proportion_table(i_cycle, 1:end-1) = array2table(proportion_on_object_list');
 
-				if isempty(cur_per_cycleXstate_count_table)
-					%cur_per_cycleXstate_count_table = template_per_trial_ref_object_table;
-					cur_per_cycleXstate_count_table = table;
-					cur_prefix = 'Count_';
-					cur_suffix = [];
-					short_object_name_list = fn_shorten_object_name_list(count_object_name_list, prefix, suffix);
-					for i_ref_object = 1 : length(short_object_name_list)
-						prefix = [];
-						suffix = [];
-						cur_object_name = short_object_name_list{i_ref_object};
-						cur_per_cycleXstate_count_table.(cur_object_name) = ref_data_col;
-					end
-					%short_object_name_list = fn_shorten_object_name_list(object_name_list, prefix, suffix);
-					cur_per_cycleXstate_count_table = renamevars(cur_per_cycleXstate_count_table, cur_per_cycleXstate_count_table.Properties.VariableNames, short_object_name_list);
-					cur_per_cycleXstate_proportion_table.cycle = nan(size(ref_data_col));
-					%short_object_name_list = fn_shorten_object_name_list({[cur_target_state, '_', cur_vergence_subset_string, '_total']}, prefix, suffix);
-					%cur_per_cycleXstate_count_table.(short_object_name_list{1}) = ref_data_col;
-				end
-				cur_per_cycleXstate_count_table.cycle(i_cycle) = triallog_table.trial_num(i_cycle);
-				cur_per_cycleXstate_count_table(i_cycle, 1:end-1) = array2table(count_on_object_list');
 
-				% if isempty(cur_per_cycleXstate_count_table)
-				% 	cur_per_cycleXstate_count_table = template_per_trial_ref_object_table;
-				% 	cur_prefix = 'Count_';
-				% 	cur_suffix = [];
-				% 	short_object_name_list = fn_shorten_object_name_list(object_name_list, prefix, suffix);
-				% 	cur_per_cycleXstate_count_table = renamevars(cur_per_cycleXstate_count_table, cur_per_cycleXstate_count_table.Properties.VariableNames, short_object_name_list);
-				% 	short_object_name_list = fn_shorten_object_name_list({[cur_target_state, '_', cur_vergence_subset_string, '_total']}, prefix, suffix);
-				% 	cur_per_cycleXstate_count_table.(short_object_name_list{1}) = ref_data_col;
-				% end
-				%
-				% cur_per_cycleXstate_count_table(i_cycle, :) = array2table([count_on_object_list', total_sample_count]);
+				cur_vergence_subset_string = 'nearFixations';
+				cur_gaze_samples_on_object_struct = fn_calculate_gaze_sample_count_and_proportions_per_object(record2D_table(cur_cycle_valid_gaze_tick_ldx & near_gaze_sample_ldx, :), gaze_src_col_name_stem, reference_object_position_stem_list, reference_object_position_stem_closeness_threshold_list, [], []);
+				cur_gaze_samples_on_object_struct.cycle = triallog_table.trial_num(i_cycle);
+				cur_gaze_samples_on_object_struct.sessionID = cur_sessionID;
+				cur_gaze_samples_on_object_struct.epoch = fn_shorten_object_name_list(cur_epoch_name, [], []);
+				cur_gaze_samples_on_object_struct.vergence = cur_vergence_subset_string;
+				gaze_on_object_prop_count_struct(end+1) = cur_gaze_samples_on_object_struct;
+
+				cur_vergence_subset_string = 'farFixations';
+				cur_gaze_samples_on_object_struct = fn_calculate_gaze_sample_count_and_proportions_per_object(record2D_table(cur_cycle_valid_gaze_tick_ldx & far_gaze_sample_ldx, :), gaze_src_col_name_stem, reference_object_position_stem_list, reference_object_position_stem_closeness_threshold_list, [], []);
+				cur_gaze_samples_on_object_struct.cycle = triallog_table.trial_num(i_cycle);
+				cur_gaze_samples_on_object_struct.sessionID = cur_sessionID;
+				cur_gaze_samples_on_object_struct.epoch = fn_shorten_object_name_list(cur_epoch_name, [], []);
+				cur_gaze_samples_on_object_struct.vergence = cur_vergence_subset_string;
+				gaze_on_object_prop_count_struct(end+1) = cur_gaze_samples_on_object_struct;	
 			end
-
-			% now concatenate for all states
-			if isempty(per_cycleXstate_proportion_table)
-				per_cycleXstate_proportion_table = cur_per_cycleXstate_proportion_table;
-			else
-				cur_per_cycleXstate_proportion_table = removevars(cur_per_cycleXstate_proportion_table, 'cycle');
-				per_cycleXstate_proportion_table = [per_cycleXstate_proportion_table, cur_per_cycleXstate_proportion_table];
-			end
-
-			if isempty(per_cycleXstate_count_table)
-				per_cycleXstate_count_table = cur_per_cycleXstate_count_table;
-			else
-				cur_per_cycleXstate_count_table = removevars(cur_per_cycleXstate_count_table, 'cycle');
-				per_cycleXstate_count_table = [per_cycleXstate_count_table, cur_per_cycleXstate_count_table];
-			end
-
 		end
+
+		gaze_on_object_prop_count_table = struct2table(gaze_on_object_prop_count_struct, 'AsArray', 1);
 
 		% delete existing cache files to avoid these lingering around
 		cache_wildcard_dir_string = regexprep(GazePropCount_cache_FQN, GazePropCount_hash, '*');	% construct the dir wildcard string
@@ -547,7 +512,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		end
 		%  save record2D_table and fixations_struct
 		disp([mfilename, ': INFO: saving existing_GazePropCount_cache as cache: ', GazePropCount_cache_FQN]);
-		save(GazePropCount_cache_FQN, 'per_cycleXstate_proportion_table', 'per_cycleXstate_count_table', 'per_state_valid_tick_idx_per_cycle_idx_array', 'per_state_valid_tick_idx_ldx_array');
+		save(GazePropCount_cache_FQN, 'gaze_on_object_prop_count_table', 'per_state_valid_tick_idx_per_cycle_idx_array', 'per_state_valid_tick_idx_ldx_array');
 	end
 
 
@@ -563,6 +528,17 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	dyadic_cycle_ldx = ismember(triallog_table.collection_type, {'joint', 'single'});
 	solo_cycle_ldx = ismember(triallog_table.collection_type, {'solo_0', 'solo_1'});
 	invalid_cycle_ldx = ismember(triallog_table.collection_type, {'None'});
+	dyadic_solo_list = {'dyadic', 'solo', 'None'};
+	cur_dyadic_solo_idx = zeros(size(dyadic_cycle_ldx));
+	cur_dyadic_solo_idx(dyadic_cycle_ldx) = find(ismember(dyadic_solo_list, {'dyadic'}));
+	cur_dyadic_solo_idx(solo_cycle_ldx) = find(ismember(dyadic_solo_list, {'solo'}));
+	cur_dyadic_solo_idx(invalid_cycle_ldx) = find(ismember(dyadic_solo_list, {'None'}));
+	%cur_dyadic_solo_idx(cur_dyadic_solo_idx == 0) = find(ismember(dyadic_solo_list, {'None'}));
+
+	triallog_table.solo_dyadic = dyadic_solo_list(cur_dyadic_solo_idx)';
+
+
+	invalid_cycle_ldx = ismember(triallog_table.collection_type, {'None'});
 	valid_cycle_ldx = ~invalid_cycle_ldx & ~exclude_cycle_ldx;
 
 
@@ -572,31 +548,257 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	if (plot_2d_and_object_proportions)
 
 		plot_set_ldx_list = {dyadic_cycle_ldx, solo_cycle_ldx};
-		plot_set_name_list = {'dyadic', 'solo'};
+		plot_set_include_regexplist_list = {'dyadic', 'solo'};
+		%plot_set_include_regexplist_list = {'solo'};
 
 		% which epochs to show in which sequence
-		epoch_list = {'Acquisition', 'CTS_collecting', 'CTS_rewarding', 'CTS_pre_acquisition'};
-		vergence_list = {'farFix'};
+		sorted_col_set_list = {'Acquisition', 'CTS_collecting', 'CTS_rewarding', 'CTS_pre_acquisition'};
+		sorted_row_set_list = {'nearFixations', 'farFixations'};
 
-		for i_plot = 1 : length(plot_set_ldx_list)
-			cur_plot_set_name = plot_set_name_list{i_plot};
-			cur_plot_set_ldx = plot_set_ldx_list{i_plot};
+		% figure out which cycles to include per plot from triallog
+		cur_key_col_list = {'sessionID', 'solo_dyadic'};
+		[ plot_key_list, plot_existing_keyfields_ldx, plot_unique_keys, plot_data_row_key_idx_arr, plot_unique_keys_count_list ] = fn_generate_key_from_selected_table_columns_CCF(cur_key_col_list, triallog_table, '_');
 
-		%[cur_target_state, '_', cur_vergence_subset_string, '_']
+
+		% figure out which columns
+		cur_key_col_list = {'epoch'};
+		[ col_key_list, col_existing_keyfields_ldx, col_unique_keys, col_data_row_key_idx_arr, col_unique_keys_count_list ] = fn_generate_key_from_selected_table_columns_CCF(cur_key_col_list, gaze_on_object_prop_count_table, '_');
+		n_cols = length(col_unique_keys_count_list);
+		if exist('sorted_col_set_list', 'var') && ~isempty(sorted_col_set_list)
+			n_cols = length(sorted_col_set_list);
+		end
+
+
+		% figure out which rows
+		cur_key_col_list = {'vergence'};
+		[ row_key_list, row_existing_keyfields_ldx, row_unique_keys, row_data_row_key_idx_arr, row_unique_keys_count_list ] = fn_generate_key_from_selected_table_columns_CCF(cur_key_col_list, gaze_on_object_prop_count_table, '_');
+		n_rows = length(row_unique_keys_count_list);
+		if exist('sorted_col_set_list', 'var') && ~isempty(sorted_col_set_list)
+			n_rows = length(sorted_row_set_list);
+		end
+		% we also want to step through these as additional rows
+		panel_request_list = {'gaze2D_per_epoch', 'gaze_on_object_proportion'};
+		n_panels = length(panel_request_list);
+
+		for i_plot = 1 : length(plot_unique_keys)
+			cur_plot_set = plot_unique_keys{i_plot};
+			disp([mfilename, ': INFO: Procession plot: ', cur_plot_set]);			
+			if ~contains(cur_plot_set, regexpPattern(plot_set_include_regexplist_list))
+				disp([mfilename, ': INFO: current plot set does not contain plot_set_include_regexplist_list, skipping: ', cur_plot_set]);
+				continue
+			end
+
+			cur_plot_set_ldx = plot_data_row_key_idx_arr == i_plot;
+			% the actual cycle numers to include
+			cur_plot_set_cycle_list = triallog_table.trial_num(cur_plot_set_ldx & valid_cycle_ldx);
+
+			% now translate to gaze_on_object_prop_count_table_ldx
+			cur_plot_data_row_ldx = ismember(gaze_on_object_prop_count_table.cycle, cur_plot_set_cycle_list);
+
+			% create a new figure
+			cur_figure_stem = cur_plot_set;
+			cur_fh = figure('Name', cur_figure_stem, 'visible', plotting_options_struct.figure_visibility_string);
+			n_panel_cols = n_cols;
+			n_panel_rows = n_rows * n_panels;	% here we want to use the rows for panels and the actual row type
+
+			plot_width_cm = (plotting_options_struct.panel_width_cm * n_panel_cols);
+			plot_height_cm = (plotting_options_struct.panel_height_cm * n_panel_rows);
+			output_rect = fn_set_figure_outputpos_and_size(cur_fh, plotting_options_struct.margin_cm, plotting_options_struct.margin_cm, plot_width_cm, plot_height_cm, 1.0, 'portrait', 'inch');
+
+			cur_fh_th = tiledlayout(cur_fh, n_panel_rows, n_panel_cols, 'TileSpacing', 'Compact', 'Padding', 'Compact');
+			cur_ah_list = [];
+
+
+			%[cur_target_state, '_', cur_vergence_subset_string, '_']
 			% use this for columns
-			for i_epoch = 1 : length(epoch_list)
-				cur_epoch = epoch_list{i_epoch};
-				%cur_epoch_ldx = 
+
+			for i_col = 1 : n_cols
+				cur_col = i_col;
+				if exist('sorted_col_set_list', 'var') && ~isempty(sorted_col_set_list)
+					cur_col_name = sorted_col_set_list{i_col};
+					cur_col_data_row_ldx = col_data_row_key_idx_arr == (find(ismember(col_unique_keys, {cur_col_name})));
+				else
+					% unsorted default
+					cur_col_name = col_unique_keys{i_col};
+					cur_col_data_row_ldx = col_data_row_key_idx_arr == i_col;
+				end
+
+				% to find the XY data for gaze2D_per_epoch
+				cur_epoch_idx = find(ismember(short_all_epoch_name_list, {cur_col_name}));
+				cur_col_per_state_valid_tick_idx_per_cycle_idx_array = per_state_valid_tick_idx_per_cycle_idx_array(:, cur_epoch_idx);
+				cur_col_ticks_in_cycles_and_epochs_ldx = ismember(per_state_valid_tick_idx_per_cycle_idx_array(:, cur_epoch_idx), cur_plot_set_cycle_list);
 
 
 				% use vergence
-				for i_vergence = 1 : length(vergence_list)
-					cur_vergence =  vergence_list{i_vergence};
-			
+				for i_row = 1 : n_rows
+					cur_row = i_row;
+					if exist('sorted_row_set_list', 'var') && ~isempty(sorted_row_set_list)
+						cur_row_name = sorted_row_set_list{i_row};
+						cur_row_data_row_ldx = row_data_row_key_idx_arr == (find(ismember(row_unique_keys, {cur_row_name})));
+					else
+						% unsorted default
+						cur_row_name = row_unique_keys{i_row};
+						cur_row_data_row_ldx = row_data_row_key_idx_arr == i_row;
+					end
+		
+					coolbar = cool(256);
+					switch cur_row_name
+						case 'allFixations'
+							cur_vergence_gaze_sample_ldx = true(size(cur_col_ticks_in_cycles_and_epochs_ldx));
+							fixation_color = [10, 200, 10]/255;
+						case 'nearFixations'
+							cur_vergence_gaze_sample_ldx = near_gaze_sample_ldx;
+							fixation_color = coolbar(1, :);
+						case 'farFixations'
+							cur_vergence_gaze_sample_ldx = far_gaze_sample_ldx;
+							fixation_color = coolbar(end, :);
+					end
 
+					cur_panel_gaze_sample_ldx = cur_col_ticks_in_cycles_and_epochs_ldx & cur_vergence_gaze_sample_ldx;
+
+					for i_panel = 1 : n_panels
+						cur_panel_row = ((cur_row - 1) * n_panels) + i_panel;
+						cur_panel_type = panel_request_list{i_panel};
+
+						% navigate to the intended tile
+						cur_tilelocation = ((cur_panel_row - 1) * n_cols) + cur_col;
+
+						% just select where to place the tile... that mapping needs
+						cur_ah = nexttile(cur_fh_th, cur_tilelocation);
+						cur_ah_list(end+1) = cur_ah;
+
+
+						switch cur_panel_type
+							case 'gaze2D_per_epoch'
+								fixation_alpha = 0.025;
+								face_ROI_radius = 1/7;
+
+								hold on
+								plot([0 1 1 0 0], [0 0 1 1 0], 'Color', [0 0 0], 'LineWidth', 1, 'DisplayName', 'Playing field');
+
+								
+								unique_B_face_center_list = unique([record2D_table.B_facecenter_X, record2D_table.B_facecenter_Y], 'row');
+
+								for i_unique_B_face_center = 1 : size(unique_B_face_center_list, 1)
+									cur_face_ROI_center_XY = unique_B_face_center_list(i_unique_B_face_center, :);
+
+									% find the current center_XY to pick up
+									% the correct name
+									cur_face_ROI_idx = find(ismember(face_ROI.center_XY, cur_face_ROI_center_XY, 'rows'));
+
+									if ~paper_blocked
+										cur_vh = viscircles(cur_face_ROI_center_XY, face_ROI_radius, 'Color', [0.7 0.7 0.7]);	% , 'DisplayName', 'Partner''s face'
+									else
+										cur_vh = viscircles(cur_face_ROI_center_XY, face_ROI_radius, 'Color', [0.7 0.7 0.7], 'LineStyle', '--');
+									end
+									set(cur_vh.Children(1), 'DisplayName', face_ROI.names{cur_face_ROI_idx});
+								end
+
+								if sum(cur_panel_gaze_sample_ldx) > 0
+									cur_gaze2D_sh = scatter(cur_ah, record2D_table.([gaze_src_col_name_stem, '_X'])(cur_panel_gaze_sample_ldx),  record2D_table.([gaze_src_col_name_stem, '_Y'])(cur_panel_gaze_sample_ldx), 'filled', 'DisplayName', cur_row_name, 'SizeData', 3, 'MarkerEdgeColor', fixation_color, 'MarkerFaceColor', fixation_color, 'MarkerFaceAlpha', fixation_alpha, 'MarkerEdgeAlpha', fixation_alpha);
+								end
+								axis equal
+								hold off
+
+								xlabel(cur_ah,'Azimuth [relative]', 'Interpreter', 'none', 'FontSize', plotting_options_struct.labelfontsize);
+								ylabel(cur_ah, 'Elevation [relative]', 'Interpreter', 'none', 'FontSize', plotting_options_struct.labelfontsize)
+								title(cur_ah, [cur_col_name], 'Interpreter', 'none', 'FontSize', plotting_options_struct.titlefontsize);
+								%subtitle(cur_ah, [cur_plot_set], 'Interpreter', 'none', 'FontSize', plotting_options_struct.subtitlefontsize);
+								%subtitle(cur_ah, ['Partner position: ', cur_face_ROI_name, ' ', cur_set_name, ' trials around ', cur_col_name], 'Interpreter', 'none');
+								%legend('Location','southeast');
+
+								set(gca, 'XLim', [-0.2, 1.2]);
+								set(gca, 'YLim', [-0.1, 1.3]);
+								
+								if (cur_col == 1)
+									[matching_entry_ldx, non_matching_entry_ldx, matching_entry_idx] = fn_find_object_by_field_regexp( cur_ah.Children, 'Type', {'^scatter', '^line'});
+									cur_lh = legend(cur_ah.Children(matching_entry_idx), 'Interpreter', 'none');
+									cur_lh = legend(cur_ah, 'Location', 'southeast', 'FontSize', plotting_options_struct.legendfontsize, 'Box', 'off', 'Interpreter', 'none');
+									cur_ah.Legend.ItemTokenSize=[10,15];	% reduce the length of the displayed line segment in the legen
+								end
+
+							case 'gaze_on_object_proportion'
+								gaze_on_object_proportion.MarkerFaceAlpha = 0.5;
+								gaze_on_object_proportion.MarkerEdgeAlpha = 0.5;
+								gaze_on_object_proportion.data_col_name_list = {...
+									...'A_binocular_eye_on_aims0_PCT',...
+									...'A_binocular_eye_on_aims1_PCT', ...
+									...'A_binocular_eye_on_agent0_PCT',...
+									...'A_binocular_eye_on_agent1_PCT', ...
+									'A_binocular_eye_on_target0_PCT', ...
+									'A_binocular_eye_on_target1_PCT', ...
+									'A_binocular_eye_on_target2_PCT', ...
+									'A_binocular_eye_on_target3_PCT', ...
+									'A_binocular_eye_on_target4_PCT', ...
+									'A_binocular_eye_on_B_facecenter_PCT', ...
+									};
+									
+								% find all relevant rows in gaze_on_object_prop_count_table
+								cur_selected_set_ldx = cur_plot_data_row_ldx & cur_col_data_row_ldx & cur_row_data_row_ldx;
+									
+								cur_data_array = nan([sum(cur_selected_set_ldx), length(gaze_on_object_proportion.data_col_name_list)]);
+								cur_xvec_array = cur_data_array;
+								cur_name_vec = cell(size(gaze_on_object_proportion.data_col_name_list));
+								for i_data_col = 1 : length(gaze_on_object_proportion.data_col_name_list)
+									data_col_name = gaze_on_object_proportion.data_col_name_list{i_data_col};
+									cur_data = gaze_on_object_prop_count_table.(data_col_name)(cur_selected_set_ldx);
+									cur_X_vec = ones(size(cur_data)) * i_data_col;
+									cur_data_array(:, i_data_col) = cur_data;
+									cur_xvec_array(:, i_data_col) = cur_X_vec;
+									cur_name_vec{i_data_col} = regexprep(regexprep(data_col_name, 'A_binocular_eye_on_', ''), '_PCT', '');
+									cur_name_vec{i_data_col} = regexprep(cur_name_vec{i_data_col}, 'B_facecenter', 'face');
+									% get the proper target type
+									if (contains(cur_name_vec(i_data_col), regexpPattern('target[0-9]')))
+										% get the cycle/trial number
+										cur_cycle = gaze_on_object_prop_count_table.cycle(find(cur_selected_set_ldx, 1, 'first'));
+										% get record2D tick index from
+										% triallog for that cycle
+										cur_tick_idx = triallog_table.collection_start_tick_idx(find(triallog_table.trial_num == cur_cycle, 1 , 'first'));
+										cur_target_id = record2D_table.([cur_name_vec{i_data_col}, '_id'])(cur_tick_idx);
+										% see enum_struct.target_id.name_list'
+										switch cur_target_id
+											case 0	% cooperative_targets_type_0
+												cur_name_vec{i_data_col} = 'coop_A';
+											case 1	% cooperative_targets_type_1
+												cur_name_vec{i_data_col} = 'coop_B';
+											case 2	% competitive_targets
+												cur_name_vec{i_data_col} = 'comp';
+											case 3 % punishing_targets
+												cur_name_vec{i_data_col} = 'pun';
+											case 4	% solo_targets_type_0
+												cur_name_vec{i_data_col} = 'Solo_A';
+											case 5	% solo_targets_type_1
+												cur_name_vec{i_data_col} = 'Solo_B';
+										end
+									end
+								end
+								hold on
+								if ~all(isnan(cur_data_array(:)))
+									swarmchart(cur_ah, cur_xvec_array, cur_data_array, 'filled', 'MarkerFaceAlpha', gaze_on_object_proportion.MarkerFaceAlpha, 'MarkerEdgeAlpha', gaze_on_object_proportion.MarkerEdgeAlpha, 'DisplayName', ['prop' '_', cur_row_name], 'SizeData', 3);
+									boxplot(cur_ah, cur_data_array, 'Symbol','');	% show no outliers, as we already show a swarmplot
+								
+
+									%xlabel(cur_ah,'gaze target', 'Interpreter', 'none', 'FontSize', plotting_options_struct.labelfontsize);
+									xticklabels(cur_name_vec)
+									ylabel(cur_ah, 'Proportion of gaze samples [%]', 'Interpreter', 'none', 'FontSize', plotting_options_struct.labelfontsize)
+									%title(cur_ah, [cur_col_name], 'Interpreter', 'none', 'FontSize', plotting_options_struct.titlefontsize);
+									%subtitle(cur_ah, '', 'Interpreter', 'none', 'FontSize', plotting_options_struct.subitlefontsize);
+								end
+
+							otherwise
+								error([mfilename, ': ERROR: unkown cur_panel_type: ', cur_panel_type]);
+						end
+
+					end
 
 				end
 			end
+
+			title(cur_fh_th, [cur_figure_stem, ', N_cycles : ', num2str(length(cur_plot_set_cycle_list))], 'Interpreter', 'none', 'FontSize', plotting_options_struct.titlefontsize+2);
+
+			cur_out_FQN = fullfile(out_dir, 'per_session', [cur_figure_stem, '.', gaze_src_col_name_stem, '.', 'gaze2D_gaze_prop', '.pdf']);
+			disp(['Saving figure as: ', cur_out_FQN]);
+			write_out_figure(cur_fh, cur_out_FQN, [], [], plotting_options_struct.format_string_list);
 		end
 	end
 
@@ -707,7 +909,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 				legend(cur_ah, 'Location', 'southeast', 'FontSize', plotting_options_struct.legendfontsize, 'Box', 'off', 'Interpreter', 'none');
 				cur_ah.Legend.ItemTokenSize=[10,15];	% reduce the length of the displayed line segment in the legend
 
-				cur_out_FQN = fullfile(out_dir, 'per_session', [proto_varname_session_id, '.', cur_face_ROI_name, '.', cur_set_name, '.', ref_event_col_stem_name, '.pdf']);
+				cur_out_FQN = fullfile(out_dir, 'per_session', [proto_varname_session_id, '.', cur_face_ROI_name, '.', cur_set_name, '.', ref_event_col_stem_name, '']);
 				disp(['Saving figure as: ', cur_out_FQN]);
 				write_out_figure(cur_fh, cur_out_FQN);
 
