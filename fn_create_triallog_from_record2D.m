@@ -1,4 +1,4 @@
-function [ triallog_table, record2D_table, sorted_target_state_transition_table ] = fn_create_triallog_from_record2D( record2D_table, enum_struct, target_radius )
+function [ triallog_table, record2D_table, sorted_target_state_transition_table ] = fn_create_triallog_from_record2D( cur_sessionID, record2D_table, enum_struct, target_radius )
 %FN_CREATE_TRIALLOG_FROM_RECORD2D Summary of this function goes here
 %   for collection and alignment event selection having a two table is
 %   pretty conveniebt, so construct one here
@@ -84,6 +84,9 @@ n_record2D_rows = size(record2D_table, 1);
 triallog_table = array2table(unique_collection_list, 'VariableNames', {'collection_num'});
 triallog_table = addvars(triallog_table, (unique_collection_list + 1), 'NewVariableNames', 'trial_num');	% make this 1-based and abstract from the fact that the collection number increases between collection end and reward state
 
+if ~ismember({'sessionID'}, triallog_table.Properties.VariableNames)
+		triallog_table.sessionID = repmat({cur_sessionID}, size(triallog_table, 1), 1);
+end
 
 % COLLECTION START / END
 triallog_table = addvars(triallog_table, record2D_table.timestamp(first_instance_of_collection_num_idx), 'NewVariableNames', 'collection_start_s');

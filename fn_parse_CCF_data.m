@@ -85,6 +85,9 @@ redo_triallog_table = 0;
 redo_DI_samples = 0;
 redo_AI_samples = 0;
 
+fn_parse_CCF_version_string = 'v.000';	% this is fed into the hashes for the caches, so the easiest way to force a single shot redo of all sessions is to change that string.
+
+
 create_timbase_conversion_between_CCF_and_EPHYS = 1; % 0: do nothing, 1: do once, >1 force
 load_TDT_analog_in_data = 1; % try to load the analog IN data recoded on the TDT system, for reward pulses...
 REF_EPOC = 'DigitalInMessage';	% what information/method to use to find matching CCF and TDT events...
@@ -240,7 +243,7 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 		};
 
 	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
-	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(1:5); % clear up to 7
+	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(1:5); % clear up to 7
 	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(6:end); % clear up to 7
 
 	only_process_gaze_calibration = 0;
@@ -684,6 +687,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 
 		record2D_subhash_list = { ...
+			DataHash(fn_parse_CCF_version_string), ...
 			DataHash(h5_struct.record2D_data), ...						% if the record2D data changed, play it save and recompute things
 			DataHash(gaze_data_source_regexp_list), ...					
 			DataHash(fn_add_gaze_data_to_record2D_request_list), ...
@@ -765,7 +769,12 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			target_radius = [];
 		end
 
-		triallog_table_subhash_list = {DataHash(record2D_table), DataHash(enum_struct), DataHash(target_radius)};
+		triallog_table_subhash_list = {...
+			DataHash(fn_parse_CCF_version_string), ...
+			DataHash(record2D_table), ...
+			DataHash(enum_struct), ...
+			DataHash(target_radius)...
+			};
 		triallog_table_hash = DataHash(triallog_table_subhash_list);
 
 		triallog_table_cache_FQN = fullfile(h5_dir_struct(1).folder, ['triallog_table_cache_', triallog_table_hash, '.mat']);
@@ -775,7 +784,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			load(triallog_table_cache_FQN);
 		else
 
-			[triallog_table, record2D_table, sorted_target_state_transition_table] = fn_create_triallog_from_record2D(record2D_table, enum_struct, target_radius);
+			[triallog_table, record2D_table, sorted_target_state_transition_table] = fn_create_triallog_from_record2D(session_id, record2D_table, enum_struct, target_radius);
 			% We need this later... NOTE: will not work well for merged
 			% sessions, as the tick timing changes for each run, and with a
 			% 1/120 second (~8ms) granularity, which is bad...
@@ -813,7 +822,12 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 	if isfield(h5_struct, 'DI_samples_data') && ~isempty(h5_struct.DI_samples_data)
 		%TODO switch to cached data if it exists
-		DI_samples_subhash_list = {DataHash(h5_struct), DataHash(json_struct), DataHash(triallog_table)};
+		DI_samples_subhash_list = {...
+			DataHash(fn_parse_CCF_version_string), ...
+			DataHash(h5_struct), ...
+			DataHash(json_struct), ...
+			DataHash(triallog_table)...
+			};
 		DI_samples_hash = DataHash(DI_samples_subhash_list);
 
 		DI_samples_cache_FQN = fullfile(h5_dir_struct(1).folder, ['DI_samples_cache_', DI_samples_hash, '.mat']);
@@ -855,7 +869,13 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	if isfield(h5_struct, 'AI_samples_data') && ~isempty(h5_struct.AI_samples_data)
 		% switch to cached data if exists
 
-		AI_samples_subhash_list = {DataHash(h5_struct), DataHash(json_struct), DataHash(triallog_table), DataHash(photodiode_AI_analog_threshold_V)};
+		AI_samples_subhash_list = {...
+			DataHash(fn_parse_CCF_version_string), ...
+			DataHash(h5_struct), ...
+			DataHash(json_struct), ...
+			DataHash(triallog_table), ...
+			DataHash(photodiode_AI_analog_threshold_V)...
+			};
 		AI_samples_hash = DataHash(AI_samples_subhash_list);
 
 		AI_samples_cache_FQN = fullfile(h5_dir_struct(1).folder, ['AI_samples_cache_', AI_samples_hash, '.mat']);
