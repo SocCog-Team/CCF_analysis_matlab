@@ -426,7 +426,7 @@ if isempty(MATCH_cur_target_IDX_idx) || force_collecting_by_processing
 	end
 end
 
-% add an index here foe later use in the filtered version of this table
+% add an index here for later use in the filtered version of this table
 sorted_target_state_transition_table.row_idx = (1:1:length(sorted_target_state_transition_table.target_position_changed))';
 
 
@@ -449,9 +449,9 @@ pre_acquisition_end_transition_ldx = ismember(sorted_target_state_transition_tab
 
 % for each pre_acquisition_end_transition
 
-% this should catch one inituiate reward for all collection periods except
+% this should catch one initiate reward for all collection periods except
 % the last
-% this is when reward magnitudes are assiigned to so we can look into the record2D trow to figure out which agent was rewarded (two agents can be on a comp target but only one will get rewarded and we want to know who...)
+% this is when reward magnitudes are assigned to so we can look into the record2D row to figure out which agent was rewarded (two agents can be on a comp target but only one will get rewarded and we want to know who...)
 initiate_reward_start_transition_ldx = ismember(sorted_target_state_transition_table.old_state_ENUM_name, {'collecting'}) & ismember(sorted_target_state_transition_table.new_state_ENUM_name, {'initiate_reward'});
 initiate_reward_start_transition_idx = find(initiate_reward_start_transition_ldx);
 
@@ -482,6 +482,9 @@ for i_target_states = 2 : length(enum_struct.target_state.name_list)
 	triallog_table.(['col_targ_', cur_target_state_name, '_start_s']) = nan(size(triallog_table.collection_num));
 	triallog_table.(['col_targ_', cur_target_state_name, '_tick_idx']) = nan(size(triallog_table.collection_num));
 
+	triallog_table.(['col_targ_', cur_target_state_name, '_end_s']) = nan(size(triallog_table.collection_num));
+	triallog_table.(['col_targ_', cur_target_state_name, '_end_tick_idx']) = nan(size(triallog_table.collection_num));
+
 	triallog_table.(['col_targ_', cur_target_state_name, '_aims0_XY']) = nan([size(triallog_table.collection_num, 1), 2]);
 	triallog_table.(['col_targ_', cur_target_state_name, '_agent0_XY']) = nan([size(triallog_table.collection_num, 1), 2]);
 	triallog_table.(['col_targ_', cur_target_state_name, '_aims1_XY']) = nan([size(triallog_table.collection_num, 1), 2]);
@@ -495,7 +498,7 @@ triallog_table.any_target_changed_pos_at_trial_start = false(size(triallog_table
 % front before running unique
 tmp_state_name_list = [enum_struct.target_state.name_list'; sorted_target_state_transition_table.new_state_ENUM_name];
 [unique_target_state_name_list, ~, proto_unique_target_state_name_list_row_idx] = unique(tmp_state_name_list, 'stable');
-% now chop the beginimg off, so we are back to the actual occuring states
+% now chop the begining off, so we are back to the actual occuring states
 %unique_target_state_name_list_row_idx = proto_unique_target_state_name_list_row_idx(length(enum_struct.target_state.name_list)+1:end);
 
 %now the same for target_IDX, but that is variable per session
@@ -504,6 +507,20 @@ tmp_state_name_list = [enum_struct.target_state.name_list'; sorted_target_state_
 % create the respective ldx
 for i_unique_target_IDX = 1 : length(unique_target_IDX_list)
 	unique_target_IDX_struct.(['target_IDX_', num2str(unique_target_IDX_list(i_unique_target_IDX)), '_ldx']) = proto_unique_target_IDX_list_row_idx == i_unique_target_IDX;
+
+	cur_target_IDX = unique_target_IDX_list(i_unique_target_IDX);
+	% for merged sessions this can contain NaNs which areequivalent with
+	% false
+	if any(isnan(record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent0'])))
+		record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent0'])(isnan(record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent0'])(:))) = false;
+		disp([mfilename, ': WARN: *_collecting_by_agent0 contains NaNs, which can happen in merged sessions, setting to false']);
+	end
+	if any(isnan(record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent1'])))
+		record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent1'])(isnan(record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent1'])(:))) = false;
+		disp([mfilename, ': WARN: *_collecting_by_agent1 contains NaNs, which can happen in merged sessions, setting to false']);
+	end
+
+
 end
 
 
@@ -568,16 +585,16 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 	% within the current collected target find the state transitions
 	% related to the rewarded collection
 
-	% for merged sessions this can contain NaNs which areequivalent with
-	% false
-	if any(isnan(record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent0'])))
-		record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent0'])(isnan(record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent0'])(:))) = false;
-		disp([mfilename, ': WARN: *_collecting_by_agent0 contains NaNs, which can happen in merged sessions, setting to false']);
-	end
-	if any(isnan(record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent1'])))
-		record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent1'])(isnan(record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent1'])(:))) = false;
-		disp([mfilename, ': WARN: *_collecting_by_agent1 contains NaNs, which can happen in merged sessions, setting to false']);
-	end
+	% % for merged sessions this can contain NaNs which areequivalent with
+	% % false
+	% if any(isnan(record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent0'])))
+	% 	record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent0'])(isnan(record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent0'])(:))) = false;
+	% 	disp([mfilename, ': WARN: *_collecting_by_agent0 contains NaNs, which can happen in merged sessions, setting to false']);
+	% end
+	% if any(isnan(record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent1'])))
+	% 	record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent1'])(isnan(record2D_table.(['target', num2str(cur_target_IDX), '_collecting_by_agent1'])(:))) = false;
+	% 	disp([mfilename, ': WARN: *_collecting_by_agent1 contains NaNs, which can happen in merged sessions, setting to false']);
+	% end
 
 
 
@@ -671,6 +688,7 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 					cur_collection_substate_idx = cur_collection_substate_idx(end);
 				otherwise
 					% let this fall though and be handled later
+					disp('Doh...');
 			end
 		end
 
@@ -705,6 +723,10 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 
 			disp('What is hapening here?, please investigate');
 			keyboard
+		else
+			% a state might not exist here...
+			disp(['Missing transition_state, cur_trial_num: ', num2str(cur_trial_num), ', cur_target_state_name: ', cur_target_state_name]);
+			%keyboard
 		end
 	end
 
@@ -850,6 +872,7 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 	%trial_end_s
 	cur_transition_search_idx = cur_initiate_reward_start_transition_idx;
 	while true
+		triallog_table.cycle(cur_trial_num) = cur_trial_num;
 		cur_transition_search_idx = cur_transition_search_idx + 1;
 		%check whether we reached the end
 		if cur_transition_search_idx > size(sorted_target_state_transition_table, 1)
@@ -887,6 +910,14 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 			
 			break
 		end
+	end
+
+	% loop over the cycles and 
+
+	if (triallog_table.cycle_start_tick_idx(cur_trial_num) > 0) && (triallog_table.cycle_end_tick_idx(cur_trial_num) > 0)
+		record2D_table.cycle(triallog_table.cycle_start_tick_idx(cur_trial_num):triallog_table.cycle_end_tick_idx(cur_trial_num)) = cur_trial_num;
+	else
+		%disp('Doh...');
 	end
 
 	% did a target change position in this trial
