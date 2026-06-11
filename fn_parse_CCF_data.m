@@ -85,10 +85,10 @@ redo_triallog_table = 0;
 redo_DI_samples = 0;
 redo_AI_samples = 0;
 
-fn_parse_CCF_version_string = 'v.000';	% this is fed into the hashes for the caches, so the easiest way to force a single shot redo of all sessions is to change that string.
+fn_parse_CCF_version_string = 'v.003';	% this is fed into the hashes for the caches, so the easiest way to force a single shot redo of all sessions is to change that string.
 
 
-create_timbase_conversion_between_CCF_and_EPHYS = 1; % 0: do nothing, 1: do once, >1 force
+create_timebase_conversion_between_CCF_and_EPHYS = 1; % 0: do nothing, 1: do once, >1 force
 load_TDT_analog_in_data = 1; % try to load the analog IN data recoded on the TDT system, for reward pulses...
 REF_EPOC = 'DigitalInMessage';	% what information/method to use to find matching CCF and TDT events...
 
@@ -244,7 +244,7 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 
 	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
 	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(1:5); % clear up to 7
-	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(6:end); % clear up to 7
+	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(6:end); % clear up to 7
 
 	only_process_gaze_calibration = 0;
 	if (only_process_gaze_calibration)
@@ -476,7 +476,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 
 	% for this we need both a TDT tank dir,as well as DO_messages.jsonl
-	if (create_timbase_conversion_between_CCF_and_EPHYS > 0) 
+	if (create_timebase_conversion_between_CCF_and_EPHYS > 0) 
 		% we either need an existing tank dir or are on a merged session,
 		% in which case we need to dive into the source run folders
 		if isempty(TDT_tank_FQN) && ~session_is_merged
@@ -507,7 +507,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 			% now check whethre the timebase conversion file already exists
 			cur_time_conversion_information_FQN = fullfile(cur_TDT_tank_FQN, 'timebase_conversion_BEHAVIOUR_EPHYS.mat');
-			if (create_timbase_conversion_between_CCF_and_EPHYS > 1) || ~isfile(cur_time_conversion_information_FQN)
+			if (create_timebase_conversion_between_CCF_and_EPHYS > 1) || ~isfile(cur_time_conversion_information_FQN)
 				% even just loading costs time so only handle
 				% cur_DO_messages_dot_jsonl_FQN if we actually want/need to
 				% create timebase_conversion_BEHAVIOUR_EPHYS
@@ -549,7 +549,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 					disp([mfilename, ': WARN: less than two common events, timebase conversion impossible, skipping...']);
 				end
 			else
-				disp('Timebase conversion mat file already exists and re-calculation not forced, skipping (set create_timbase_conversion_between_CCF_and_EPHYS = 2 to force re-calculation)');
+				disp('Timebase conversion mat file already exists and re-calculation not forced, skipping (set create_timebase_conversion_between_CCF_and_EPHYS = 2 to force re-calculation)');
 			end
 		end
 	end
@@ -727,6 +727,15 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			end
 			[record2D_table, fixations_struct] = fn_amend_record2D_table(record2D_table, json_struct.conf_dot_json, fn_amend_record2D_table_request_list, max_dispersion_threshold, min_fixation_duration_threshold_ms, GAZE_OPTS_struct);
 
+			% add the sessionID column to record2D (for merged sessions maybe consider adding the src_sessionIDs as well)
+			if ~ismember({'sessionID'}, record2D_table.Properties.VariableNames)
+				record2D_table.sessionID = repmat({session_id}, size(record2D_table, 1), 1);
+			end
+			if ~ismember({'cycle'}, record2D_table.Properties.VariableNames)
+				record2D_table.cycle = zeros(size(record2D_table, 1), 1);
+			end
+
+
 			% delete existing cache files to avoid these lingering around
 			cache_wildcard_dir_string = regexprep(record2D_cache_FQN, record2D_hash, '*');	% construct the dir wildcard string
 			existing_record2D_cache_FQN_dirstruct = dir(cache_wildcard_dir_string);
@@ -781,7 +790,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		if isfile(triallog_table_cache_FQN) && ~(redo_triallog_table)
 			% load this
 			disp([mfilename, ': INFO: loading triallog_table from cache: ', triallog_table_cache_FQN]);
-			load(triallog_table_cache_FQN);
+			load(triallog_table_cache_FQN, 'triallog_table', 'record2D_table', 'sorted_target_state_transition_table');
 		else
 
 			[triallog_table, record2D_table, sorted_target_state_transition_table] = fn_create_triallog_from_record2D(session_id, record2D_table, enum_struct, target_radius);
