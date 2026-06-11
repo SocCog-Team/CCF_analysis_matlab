@@ -370,8 +370,12 @@ if ismember({'add_per_target_changed_pos_col'}, request_list)
 		cur_new_col_name = [cur_target_prefix, '_changed_pos'];
 		cur_target_pos_XY_list = [record2D_table.([cur_target_prefix, '_X'])(:), record2D_table.([cur_target_prefix, '_Y'])(:)];
 		% get the distance betwenn samples
-		cur_sample_by_sample_distance = [1 ; vecnorm((cur_target_pos_XY_list(2:end, :) - cur_target_pos_XY_list(1:end-1, :)), 2, 2)]; % way faster than calling norm row by row...
+		cur_sample_by_sample_distance = [1 ; vecnorm((cur_target_pos_XY_list(2:end, :) - cur_target_pos_XY_list(1:end-1, :)), 2, 2)]; % way faster than calling norm row by row... % FIXME only set target to one in the first tick that where actually shown
 		record2D_table.(cur_new_col_name) = cur_sample_by_sample_distance ~= 0;
+		record2D_table.(cur_new_col_name)(isnan(cur_sample_by_sample_distance)) = false;
+		if any(isnan(cur_target_pos_XY_list(1, :)))
+			record2D_table.(cur_new_col_name)(1) = false;
+		end
 	end
 end
 
