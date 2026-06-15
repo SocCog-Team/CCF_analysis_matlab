@@ -15,6 +15,8 @@ debug = 0;
 
 % control variables
 show_2D_fixations = 0;	% first variant, show 2D fixation positions for a specific epoch, splitting out near/far
+plot_2d_and_object_proportions = 0;
+plot_2d_and_object_proportions_xsession = 1;
 
 
 % if we run this directly for testing we want/need this to be in the
@@ -71,9 +73,13 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 		};
 
 	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
-%	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(6:end); % clear up to 7
-%	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
+	%	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(6:end); % clear up to 7
+	%	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
 	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(6:end); % clear up to 7
+
+	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(6:7); % clear up to 7
+	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end-1:end); % clear up to 7
+
 
 	only_process_gaze_calibration = 0;
 	if (only_process_gaze_calibration)
@@ -101,6 +107,31 @@ if ~iscell(cur_CCF_runfolder_FQN_list)
 	cur_CCF_runfolder_FQN_list = {cur_CCF_runfolder_FQN_list};
 end
 
+% config
+max_cycle_duration_s = 10;	% exclude cycles longer than this
+mean_dX_CCF_threshold = 0.05;	%(values smaller near fixation, values larger far fixations)
+% sample based
+min_gaze_confidence = 0.85;%
+gaze_src_col_name_stem = 'A_binocular_eye';
+
+additional_state_name_list = {'Acquisition'};	% these do not map fully onto target states
+additional_state_start_tick_idx_col_name_list = {'PDD_onset_tick_idx'};
+additional_state_end_col_tick_idx_name_list = {'collecting_by_agent_start_tick_idx'};
+
+
+
+
+% collector struct for the individual session data
+xsession.sessiondir_list = {};
+xsession.sessionID_list = {};
+xsession.gaze_on_object_prop_count_table = [];
+xsession.per_state_valid_tick_idx_per_cycle_idx_array = [];
+xsession.per_state_valid_tick_idx_ldx_array = [];
+xsession.per_state_valid_tick_sessionID_cycle_per_cycle_idx_cellarray = [];
+xsession.record2D_table = [];
+xsession.triallog_table = [];
+xsession.per_run_face_ROI_idx = [];
+
 % loop over the sessions to do your thing...
 for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	cur_CCF_runfolder_FQN = cur_CCF_runfolder_FQN_list{i_runfolder};
@@ -110,10 +141,14 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	if ~strcmp(tmp_ext, '.sessiondir')
 		error([mfilename, ': WARN: session folder does not end in .sessiondir...']);
 	end
+
+	xsession.sessiondir_list(end+1) = {cur_CCF_runfolder_FQN};
+
 	cur_sessionID = proto_varname_session_id;
 	varname_session_id = fn_sanitize_value_as_matlab_variable_name(proto_varname_session_id, 1 ,1);
 	timestamps.(mfilename).(varname_session_id).start = tic;
 
+	xsession.sessionID_list(end+1) = {cur_sessionID};
 
 	% we need per sesson-run information about the approximate position of
 	% the partner's face
@@ -124,7 +159,14 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 	% loading current session
 	disp('Parsing current session CCF data, might take a while');
+	%[triallog_table, record_struct, record2D_table, sorted_target_state_transition_table, AI_samples_struct, DI_samples_struct, json_struct, h5_struct, txt_struct, jsonl_struct, enum_struct, fixations_struct, orig_GAZE_OPTS_struct] = fn_parse_CCF_data( cur_CCF_runfolder_FQN );
 	[triallog_table, record_struct, record2D_table, sorted_target_state_transition_table, AI_samples_struct, DI_samples_struct, json_struct, h5_struct, txt_struct, jsonl_struct, enum_struct, fixations_struct, orig_GAZE_OPTS_struct] = fn_parse_CCF_data( cur_CCF_runfolder_FQN );
+
+	% to save memory...
+	superfluous_varaiable_list = {'record_struct', 'AI_samples_struct', 'DI_samples_struct', 'h5_struct', 'txt_struct', 'jsonl_struct'};
+	clear(superfluous_varaiable_list{:});
+
+
 
 	% clean up triallog_table
 	triallog_table_remove_row_ldx = ismember(triallog_table.col_targ_id_name, {'None'}) | isnan(triallog_table.col_targ_IDX) | ismember(triallog_table.collection_type, {'None'});
@@ -191,7 +233,8 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	% convenience mappings
 	GAZE_OPTS_struct = orig_GAZE_OPTS_struct;	% TODO automate this
 	conf_struct = json_struct.conf_dot_json;
-	%
+	% this needs the conf_struct so can npot be done statically outside
+	% the loop
 	ROI_center_name_list = {'facecenter', 'face_left', 'face_right'};
 	ROI_color_list = {[231, 41, 138]/255, [217, 95, 2]/255, [27, 158, 119]/255}; % this should be separated out by near/far?
 
@@ -234,6 +277,9 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	face_ROI.colors = ROI_color_list;
 	face_ROI.center_XY_pixel = [ROI_center_X_list_pixel', ROI_center_Y_list_pixel'];
 	face_ROI.center_XY = [ROI_center_X_list', ROI_center_Y_list'];
+
+
+	xsession.face_ROI = face_ROI;	% this is alwys the same but to keep thjings simple just re-assign on each iteration
 
 	% map face position to session and run, assume facecenter, unless
 	% otherwise defined, also assume facecenter for solo_0/solo_1 for
@@ -278,6 +324,12 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			per_run_face_ROI_idx = repmat(find(ismember(face_ROI.names, {'facecenter'})), n_src_runs, 1);
 	end
 
+	if isempty(xsession.per_run_face_ROI_idx)
+		xsession.per_run_face_ROI_idx = per_run_face_ROI_idx;
+	else
+		xsession.per_run_face_ROI_idx = [xsession.per_run_face_ROI_idx; per_run_face_ROI_idx];
+	end
+
 
 	% now add the partner face center positpion and paper_block information
 	% to the triallog_table and record2D_table
@@ -290,32 +342,15 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	triallog_table.paper_blocked = zeros([size(triallog_table, 1) 1]) + paper_blocked;	% TODO change to per run parameter?
 
 
-
-	% define a relevant time window per trial
-
-	% threshold fixations into near and far based on mean_dX_CCF, look at
-	% the histogram to define this threshold empirically
-	%figure('Name', 'mean_dX_CCF');
-	%histogram(fixations_struct.A_binocular_eye.mean_dX_CCF, 100)
-	mean_dX_CCF_threshold = 0.05;	%(values smaller near fixation, values larger far fixations)
-	near_fixation_ldx = fixations_struct.A_binocular_eye.mean_dX_CCF <= mean_dX_CCF_threshold;
-	far_fixation_ldx = fixations_struct.A_binocular_eye.mean_dX_CCF > mean_dX_CCF_threshold;
-
-	% sample based
-	min_gaze_confidence = 0.85;%
-	gaze_src_col_name_stem = 'A_binocular_eye';
-	valid_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_confidence']) >= min_gaze_confidence;
-	near_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_dX']) <= mean_dX_CCF_threshold;
-	far_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_dX']) > mean_dX_CCF_threshold;
+	if isempty(xsession.record2D_table)
+		xsession.record2D_table = record2D_table;
+	else
+		xsession.record2D_table = [xsession.record2D_table; record2D_table];
+	end
 
 
-
-	% TODO iterate over epochs:
-	% acquisition period: target collection period: reward_period,
-	% pre_acquisiton
 
 	% exclude cycles longer than X seconds
-	max_cycle_duration_s = 10;
 	cycle_duration_list = triallog_table.cycle_end_s - triallog_table.cycle_start_s;
 	exclude_cycle_ldx =  cycle_duration_list > max_cycle_duration_s;
 	exclude_tick_ldx = record2D_table.timestamp > 0;
@@ -330,6 +365,71 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			end
 		end
 	end
+
+
+	% define trial_sets
+	dyadic_cycle_ldx = ismember(triallog_table.collection_type, {'joint', 'single'});
+	solo_cycle_ldx = ismember(triallog_table.collection_type, {'solo_0', 'solo_1'});
+	invalid_cycle_ldx = ismember(triallog_table.collection_type, {'None'});
+	dyadic_solo_list = {'dyadic', 'solo', 'None'};
+	cur_dyadic_solo_idx = zeros(size(dyadic_cycle_ldx));
+	cur_dyadic_solo_idx(dyadic_cycle_ldx) = find(ismember(dyadic_solo_list, {'dyadic'}));
+	cur_dyadic_solo_idx(solo_cycle_ldx) = find(ismember(dyadic_solo_list, {'solo'}));
+	cur_dyadic_solo_idx(invalid_cycle_ldx) = find(ismember(dyadic_solo_list, {'None'}));
+	cur_dyadic_solo_idx(cur_dyadic_solo_idx == 0) = find(ismember(dyadic_solo_list, {'None'}));
+	triallog_table.solo_dyadic = dyadic_solo_list(cur_dyadic_solo_idx)';
+
+
+	invalid_cycle_ldx = ismember(triallog_table.collection_type, {'None'});
+	valid_cycle_ldx = ~invalid_cycle_ldx & ~exclude_cycle_ldx;
+
+	if isempty(xsession.triallog_table)
+		xsession.triallog_table = triallog_table;
+	else
+		xsession.triallog_table = [xsession.triallog_table; triallog_table];
+	end
+
+
+
+	% define a relevant time window per trial
+
+	% threshold fixations into near and far based on mean_dX_CCF, look at
+	% the histogram to define this threshold empirically
+	%figure('Name', 'mean_dX_CCF');
+	%histogram(fixations_struct.A_binocular_eye.mean_dX_CCF, 100)
+	%mean_dX_CCF_threshold = 0.05;	%(values smaller near fixation, values larger far fixations)
+	near_fixation_ldx = fixations_struct.A_binocular_eye.mean_dX_CCF <= mean_dX_CCF_threshold;
+	far_fixation_ldx = fixations_struct.A_binocular_eye.mean_dX_CCF > mean_dX_CCF_threshold;
+
+	% sample based
+	%min_gaze_confidence = 0.85;%
+	%gaze_src_col_name_stem = 'A_binocular_eye';
+	valid_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_confidence']) >= min_gaze_confidence;
+	near_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_dX']) <= mean_dX_CCF_threshold;
+	far_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_dX']) > mean_dX_CCF_threshold;
+
+
+
+	% TODO iterate over epochs:
+	% acquisition period: target collection period: reward_period,
+	% pre_acquisiton
+
+	% % exclude cycles longer than X seconds
+	% max_cycle_duration_s = 10;
+	% cycle_duration_list = triallog_table.cycle_end_s - triallog_table.cycle_start_s;
+	% exclude_cycle_ldx =  cycle_duration_list > max_cycle_duration_s;
+	% exclude_tick_ldx = record2D_table.timestamp > 0;
+	%
+	% % invert logic to exclude by default
+	% for i_cycle = 1 : length(exclude_cycle_ldx)
+	% 	if ~exclude_cycle_ldx(i_cycle)
+	% 	cur_trial_start_tick_idx = triallog_table.cycle_start_tick_idx(i_cycle);
+	% 	cur_trial_end_tick_idx = triallog_table.cycle_end_tick_idx(i_cycle) ;
+	% 	if (cur_trial_start_tick_idx > 0) && (cur_trial_end_tick_idx > 0)
+	% 	exclude_tick_ldx(cur_trial_start_tick_idx:cur_trial_end_tick_idx) = false;
+	% 	end
+	% 	end
+	% end
 
 	% create by collection type ldx lists...
 
@@ -348,9 +448,9 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	target_state_start_name_list = triallog_table.Properties.VariableNames(target_state_start_col_ldx);
 	target_state_end_name_list = triallog_table.Properties.VariableNames(target_state_end_col_ldx);
 	target_state_name_list = regexprep(target_state_start_name_list, '_tick_idx', '');
-	additional_state_name_list = {'Acquisition'};	% these do not map fully onto target states
-	additional_state_start_tick_idx_col_name_list = {'PDD_onset_tick_idx'};
-	additional_state_end_col_tick_idx_name_list = {'collecting_by_agent_start_tick_idx'};
+	% additional_state_name_list = {'Acquisition'};	% these do not map fully onto target states
+	% additional_state_start_tick_idx_col_name_list = {'PDD_onset_tick_idx'};
+	% additional_state_end_col_tick_idx_name_list = {'collecting_by_agent_start_tick_idx'};
 
 	all_epoch_name_list = [target_state_name_list, additional_state_name_list];
 	short_all_epoch_name_list = fn_shorten_object_name_list(all_epoch_name_list);
@@ -368,11 +468,14 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 
 	reference_object_position_stem_list = [aim_prefix_list, agent_prefix_list, target_prefix_list, 'B_facecenter'];	% for gaze_to_object_mapping_rule all this is fine, but for closest_object_within_threshold this is less fine
+	reference_object_position_stem_closeness_threshold_list = [zeros(size(aim_prefix_list)) + 0.1, zeros(size(agent_prefix_list)) + conf_struct.agent_radius*2, zeros(size(target_prefix_list)) + conf_struct.target_radius*2, 1/7];
+
+	
 	reference_object_position_stem_list = [target_prefix_list, 'B_facecenter'];	% use for closest_object_within_threshold
-	% we want/need to test for each samp;le whether it is close
+	reference_object_position_stem_closeness_threshold_list = [zeros(size(target_prefix_list)) + conf_struct.target_radius*2, 1/7];
+	% we want/need to test for each sample whether it is close
 	% enough to any object to be cpunted as on that object
 	% for now do not assign things exclusively (by picking the closest if multiple objects qualify)
-	reference_object_position_stem_closeness_threshold_list = [zeros(size(aim_prefix_list)) + 0.1, zeros(size(agent_prefix_list)) + conf_struct.agent_radius*2, zeros(size(target_prefix_list)) + conf_struct.target_radius*2, 1/7];
 
 	template_per_trial_ref_object_table = table;
 	ref_data_col = nan(size(triallog_table.collection_num));
@@ -415,7 +518,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	else
 
 
-		% accumulate as struct, later convert to table 
+		% accumulate as struct, later convert to table
 		gaze_on_object_prop_count_struct = [];
 
 		for i_target_state = 1 : length(all_epoch_name_list)
@@ -465,13 +568,17 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 				% sample types (near and far...
 				cur_cycle_valid_gaze_tick_ldx = cur_target_stateXcycle_tick_ldx & valid_gaze_sample_ldx;	% let"s exclude untrustworthy gaze samples...
 
-				
+
 				cur_vergence_subset_string = 'allFixations';
 				cur_gaze_samples_on_object_struct = fn_calculate_gaze_sample_count_and_proportions_per_object(record2D_table(cur_cycle_valid_gaze_tick_ldx, :), gaze_src_col_name_stem, reference_object_position_stem_list, reference_object_position_stem_closeness_threshold_list, gaze_to_object_mapping_rule, [], []);
 				cur_gaze_samples_on_object_struct.cycle = triallog_table.trial_num(i_cycle);
 				cur_gaze_samples_on_object_struct.sessionID = cur_sessionID;
 				cur_gaze_samples_on_object_struct.epoch = fn_shorten_object_name_list(cur_epoch_name, [], []);
 				cur_gaze_samples_on_object_struct.vergence = cur_vergence_subset_string;
+				% add some aggregate columns: aims_total, agents_total,
+				% target_total, selected_target, nonselected_targets
+
+
 				if isempty(gaze_on_object_prop_count_struct)
 					gaze_on_object_prop_count_struct = cur_gaze_samples_on_object_struct;
 				else
@@ -522,27 +629,40 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	cur_duration_s = toc(timestamps.(mfilename).per_cycle_proportion_count_loop.start);
 	disp([mfilename, ': Collecting per cycle and state gaze proportions took: ', num2str(cur_duration_s), ' seconds (', num2str(floor(cur_duration_s/(60*60))), ' hours ', num2str(floor(mod(cur_duration_s, 3600)/60)), ' minutes ', num2str(mod(cur_duration_s, 60)), ' seconds).']);
 
+	% combine across sessions
+	if isempty(xsession.gaze_on_object_prop_count_table)
+		xsession.gaze_on_object_prop_count_table = gaze_on_object_prop_count_table;
+	else
+		xsession.gaze_on_object_prop_count_table = [xsession.gaze_on_object_prop_count_table; gaze_on_object_prop_count_table];
+	end
+
+	if isempty(xsession.per_state_valid_tick_idx_per_cycle_idx_array)
+		xsession.per_state_valid_tick_idx_per_cycle_idx_array = per_state_valid_tick_idx_per_cycle_idx_array;
+	else
+		xsession.per_state_valid_tick_idx_per_cycle_idx_array = [xsession.per_state_valid_tick_idx_per_cycle_idx_array; per_state_valid_tick_idx_per_cycle_idx_array];
+	end
+
+
+	if isempty(xsession.per_state_valid_tick_idx_ldx_array)
+		xsession.per_state_valid_tick_idx_ldx_array = per_state_valid_tick_idx_ldx_array;
+	else
+		xsession.per_state_valid_tick_idx_ldx_array = [xsession.per_state_valid_tick_idx_ldx_array; per_state_valid_tick_idx_ldx_array];
+	end
+
+	if isempty(xsession.per_state_valid_tick_sessionID_cycle_per_cycle_idx_cellarray)
+		xsession.per_state_valid_tick_sessionID_cycle_per_cycle_idx_cellarray = per_state_valid_tick_sessionID_cycle_per_cycle_idx_cellarray;
+	else
+		xsession.per_state_valid_tick_sessionID_cycle_per_cycle_idx_cellarray = [xsession.per_state_valid_tick_sessionID_cycle_per_cycle_idx_cellarray; per_state_valid_tick_sessionID_cycle_per_cycle_idx_cellarray];
+	end
+
+
+
+
+
 
 	% just pre process all
 	%continue
 
-
-	% define trial_sets
-	dyadic_cycle_ldx = ismember(triallog_table.collection_type, {'joint', 'single'});
-	solo_cycle_ldx = ismember(triallog_table.collection_type, {'solo_0', 'solo_1'});
-	invalid_cycle_ldx = ismember(triallog_table.collection_type, {'None'});
-	dyadic_solo_list = {'dyadic', 'solo', 'None'};
-	cur_dyadic_solo_idx = zeros(size(dyadic_cycle_ldx));
-	cur_dyadic_solo_idx(dyadic_cycle_ldx) = find(ismember(dyadic_solo_list, {'dyadic'}));
-	cur_dyadic_solo_idx(solo_cycle_ldx) = find(ismember(dyadic_solo_list, {'solo'}));
-	cur_dyadic_solo_idx(invalid_cycle_ldx) = find(ismember(dyadic_solo_list, {'None'}));
-	%cur_dyadic_solo_idx(cur_dyadic_solo_idx == 0) = find(ismember(dyadic_solo_list, {'None'}));
-
-	triallog_table.solo_dyadic = dyadic_solo_list(cur_dyadic_solo_idx)';
-
-
-	invalid_cycle_ldx = ismember(triallog_table.collection_type, {'None'});
-	valid_cycle_ldx = ~invalid_cycle_ldx & ~exclude_cycle_ldx;
 
 
 	% plot far fixations and proportions of samples for dyadic
@@ -551,8 +671,30 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	% across sessions to allow merging sessions.
 
 
-	plot_2d_and_object_proportions = 1;
+
 	if (plot_2d_and_object_proportions)
+
+		% sample based, recreate here to avoid having to collect in
+		% xsession (we need to also define these per session earlier for the proportion calculations)
+		%min_gaze_confidence = 0.85;%
+		%gaze_src_col_name_stem = 'A_binocular_eye';
+		valid_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_confidence']) >= min_gaze_confidence;
+		near_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_dX']) <= mean_dX_CCF_threshold;
+		far_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_dX']) > mean_dX_CCF_threshold;
+
+		% repeat so we have this for the merged data as well instead of
+		% collectiong it in xsession....
+		target_state_col_ldx = contains(triallog_table.Properties.VariableNames, regexpPattern('^col_targ_\w*_tick_idx$'));
+		target_state_end_col_ldx = contains(triallog_table.Properties.VariableNames, regexpPattern('^col_targ_\w*_end_tick_idx$'));
+		target_state_start_col_ldx = target_state_col_ldx & ~target_state_end_col_ldx;
+		target_state_start_name_list = triallog_table.Properties.VariableNames(target_state_start_col_ldx);
+		target_state_end_name_list = triallog_table.Properties.VariableNames(target_state_end_col_ldx);
+		target_state_name_list = regexprep(target_state_start_name_list, '_tick_idx', '');
+		all_epoch_name_list = [target_state_name_list, additional_state_name_list];
+		short_all_epoch_name_list = fn_shorten_object_name_list(all_epoch_name_list);
+
+
+
 
 		plot_set_ldx_list = {dyadic_cycle_ldx, solo_cycle_ldx};
 		plot_set_include_regexplist_list = {'dyadic', 'solo'};
@@ -569,7 +711,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		% triallog effective cycle_number (
 		cur_key_col_list = {'sessionID', 'trial_num'};
 		[triallog_cycle_key_list, triallog_cycle_existing_keyfields_ldx, triallog_cycle_unique_keys, triallog_cycle_data_row_key_idx_arr, triallog_cycle_unique_keys_count_list ] = fn_generate_key_from_selected_table_columns_CCF(cur_key_col_list, triallog_table, '_');
-		
+
 
 		% gaze_on_object_prop_count_table effective cycle_number (
 		cur_key_col_list = {'sessionID', 'cycle'};
@@ -580,325 +722,36 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		% figure out which columns
 		cur_key_col_list = {'epoch'};
 		[ col_key_list, col_existing_keyfields_ldx, col_unique_keys, col_data_row_key_idx_arr, col_unique_keys_count_list ] = fn_generate_key_from_selected_table_columns_CCF(cur_key_col_list, gaze_on_object_prop_count_table, '_');
-		n_cols = length(col_unique_keys_count_list);
-		if exist('sorted_col_set_list', 'var') && ~isempty(sorted_col_set_list)
-			n_cols = length(sorted_col_set_list);
-		end
+		% n_cols = length(col_unique_keys);
+		% if exist('sorted_col_set_list', 'var') && ~isempty(sorted_col_set_list)
+		% 	n_cols = length(sorted_col_set_list);
+		% end
 
 
 		% figure out which rows
 		cur_key_col_list = {'vergence'};
 		[ row_key_list, row_existing_keyfields_ldx, row_unique_keys, row_data_row_key_idx_arr, row_unique_keys_count_list ] = fn_generate_key_from_selected_table_columns_CCF(cur_key_col_list, gaze_on_object_prop_count_table, '_');
-		n_rows = length(row_unique_keys_count_list);
-		if exist('sorted_col_set_list', 'var') && ~isempty(sorted_col_set_list)
-			n_rows = length(sorted_row_set_list);
-		end
+		% n_rows = length(row_unique_keys);
+		% if exist('sorted_col_set_list', 'var') && ~isempty(sorted_col_set_list)
+		% 	n_rows = length(sorted_row_set_list);
+		% end
 		% we also want to step through these as additional rows
 		panel_request_list = {'gaze2D_per_epoch', 'gaze_on_object_proportion'};
-		n_panels = length(panel_request_list);
+		% n_panels = length(panel_request_list);
 
-		for i_plot = 1 : length(plot_unique_keys)
-			cur_plot_set = plot_unique_keys{i_plot};
-			disp([mfilename, ': INFO: Procession plot: ', cur_plot_set]);			
-			if ~contains(cur_plot_set, regexpPattern(plot_set_include_regexplist_list))
-				disp([mfilename, ': INFO: current plot set does not contain plot_set_include_regexplist_list, skipping: ', cur_plot_set]);
-				continue
-			end
+		target_ignore_list = {'coop_A', 'coop_B', 'comp', 'pun', 'Solo_A', 'Solo_B', 'target0', 'target1', 'target2', 'target3', 'target4', 'target5', 'target6', 'target7', 'target8', 'target9'};
+		aggregation_type_string = 'per_session';
 
-			cur_plot_set_ldx = plot_data_row_key_idx_arr == i_plot;
-			% the actual cycle numers to include
-			cur_plot_set_cycle_list = triallog_table.trial_num(cur_plot_set_ldx & valid_cycle_ldx);
-			
-			% use the full cycle IDs including the session name
-			cur_triallog_cycle_key_list = triallog_cycle_key_list(cur_plot_set_ldx & valid_cycle_ldx);
-
-			% now translate to gaze_on_object_prop_count_table_ldx
-			cur_plot_data_row_ldx = ismember(gaze_on_object_prop_count_table.cycle, cur_plot_set_cycle_list);
-
-			% now translate to gaze_on_object_prop_count_table_ldx
-			cur_plot_data_row_ldx = ismember(goopc_table_cycle_key_list, cur_triallog_cycle_key_list);
-
-
-
-			% create a new figure
-			cur_figure_stem = cur_plot_set;
-			cur_fh = figure('Name', cur_figure_stem, 'visible', plotting_options_struct.figure_visibility_string);
-			n_panel_cols = n_cols;
-			n_panel_rows = n_rows * n_panels;	% here we want to use the rows for panels and the actual row type
-
-			plot_width_cm = (plotting_options_struct.panel_width_cm * n_panel_cols);
-			plot_height_cm = (plotting_options_struct.panel_height_cm * n_panel_rows);
-			output_rect = fn_set_figure_outputpos_and_size(cur_fh, plotting_options_struct.margin_cm, plotting_options_struct.margin_cm, plot_width_cm, plot_height_cm, 1.0, 'portrait', 'inch');
-
-			cur_fh_th = tiledlayout(cur_fh, n_panel_rows, n_panel_cols, 'TileSpacing', 'Compact', 'Padding', 'Compact');
-			cur_ah_list = [];
-
-
-			%[cur_target_state, '_', cur_vergence_subset_string, '_']
-			% use this for columns
-
-			for i_col = 1 : n_cols
-				cur_col = i_col;
-				if exist('sorted_col_set_list', 'var') && ~isempty(sorted_col_set_list)
-					cur_col_name = sorted_col_set_list{i_col};
-					cur_col_data_row_ldx = col_data_row_key_idx_arr == (find(ismember(col_unique_keys, {cur_col_name})));
-				else
-					% unsorted default
-					cur_col_name = col_unique_keys{i_col};
-					cur_col_data_row_ldx = col_data_row_key_idx_arr == i_col;
-				end
-
-				% to find the XY data for gaze2D_per_epoch
-				% TODO: make tghis fot for merged sessions where the cycle
-				% number alone is not sufficient
-				cur_epoch_idx = find(ismember(short_all_epoch_name_list, {cur_col_name}));
-				%cur_col_per_state_valid_tick_idx_per_cycle_idx_array = per_state_valid_tick_idx_per_cycle_idx_array(:, cur_epoch_idx);
-				%cur_col_ticks_in_cycles_and_epochs_ldx = ismember(per_state_valid_tick_idx_per_cycle_idx_array(:, cur_epoch_idx), cur_plot_set_cycle_list);
-
-				% use sessionID cycles instead as that allows to operate on
-				% merged sessions...
-				cur_col_per_state_valid_tick_sessionID_cycle_per_cycle_idx_list = per_state_valid_tick_sessionID_cycle_per_cycle_idx_cellarray(:, cur_epoch_idx);
-				cur_col_ticks_in_cycles_and_epochs_ldx = ismember(cur_col_per_state_valid_tick_sessionID_cycle_per_cycle_idx_list, cur_triallog_cycle_key_list);% this is costlier than the other methiod, but allows merrging sessions across days
-
-	
-				% use vergence
-				for i_row = 1 : n_rows
-					cur_row = i_row;
-					if exist('sorted_row_set_list', 'var') && ~isempty(sorted_row_set_list)
-						cur_row_name = sorted_row_set_list{i_row};
-						cur_row_data_row_ldx = row_data_row_key_idx_arr == (find(ismember(row_unique_keys, {cur_row_name})));
-					else
-						% unsorted default
-						cur_row_name = row_unique_keys{i_row};
-						cur_row_data_row_ldx = row_data_row_key_idx_arr == i_row;
-					end
-		
-					coolbar = cool(256);
-					switch cur_row_name
-						case 'allFixations'
-							cur_vergence_gaze_sample_ldx = true(size(cur_col_ticks_in_cycles_and_epochs_ldx));
-							fixation_color = [10, 200, 10]/255;
-						case 'nearFixations'
-							cur_vergence_gaze_sample_ldx = near_gaze_sample_ldx;
-							fixation_color = coolbar(1, :);
-						case 'farFixations'
-							cur_vergence_gaze_sample_ldx = far_gaze_sample_ldx;
-							fixation_color = coolbar(end, :);
-					end
-
-					cur_panel_gaze_sample_ldx = cur_col_ticks_in_cycles_and_epochs_ldx & cur_vergence_gaze_sample_ldx;
-
-					for i_panel = 1 : n_panels
-						cur_panel_row = ((cur_row - 1) * n_panels) + i_panel;
-						cur_panel_type = panel_request_list{i_panel};
-
-						% navigate to the intended tile
-						cur_tilelocation = ((cur_panel_row - 1) * n_cols) + cur_col;
-
-						% just select where to place the tile... that mapping needs
-						cur_ah = nexttile(cur_fh_th, cur_tilelocation);
-						cur_ah_list(end+1) = cur_ah;
-
-
-						switch cur_panel_type
-							case 'gaze2D_per_epoch'
-								fixation_alpha = 0.025;
-								face_ROI_radius = 1/7;
-
-								hold on
-								plot([0 1 1 0 0], [0 0 1 1 0], 'Color', [0 0 0], 'LineWidth', 1, 'DisplayName', 'Playing field');
-
-								
-								unique_B_face_center_list = unique([record2D_table.B_facecenter_X(cur_col_ticks_in_cycles_and_epochs_ldx), record2D_table.B_facecenter_Y(cur_col_ticks_in_cycles_and_epochs_ldx)], 'row');
-
-								for i_unique_B_face_center = 1 : size(unique_B_face_center_list, 1)
-									cur_face_ROI_center_XY = unique_B_face_center_list(i_unique_B_face_center, :);
-
-									% find the current center_XY to pick up
-									% the correct name
-									cur_face_ROI_idx = find(ismember(face_ROI.center_XY, cur_face_ROI_center_XY, 'rows'));
-
-									if ~paper_blocked
-										cur_vh = viscircles(cur_face_ROI_center_XY, face_ROI_radius, 'Color', [0.7 0.7 0.7]);	% , 'DisplayName', 'Partner''s face'
-									else
-										cur_vh = viscircles(cur_face_ROI_center_XY, face_ROI_radius, 'Color', [0.7 0.7 0.7], 'LineStyle', '--');
-									end
-									set(cur_vh.Children(1), 'DisplayName', face_ROI.names{cur_face_ROI_idx});
-								end
-
-								color_by_face_center = 1;
-								if (color_by_face_center) && size(unique_B_face_center_list, 1) > 1
-									for i_unique_B_face_center = 1 : size(unique_B_face_center_list, 1)
-										cur_face_ROI_center_XY = unique_B_face_center_list(i_unique_B_face_center, :);
-										cur_face_ROI_idx = find(ismember(face_ROI.center_XY, cur_face_ROI_center_XY, 'rows'));
-										cur_face_ROI_name = face_ROI.names{cur_face_ROI_idx};
-										cur_record2D_table_face_center_XY = [record2D_table.B_facecenter_X, record2D_table.B_facecenter_Y];
-										cur_face_ROI_tick_ldx = ismember(cur_record2D_table_face_center_XY, cur_face_ROI_center_XY, 'rows');
-										cur_color = face_ROI.colors{cur_face_ROI_idx};
-
-										if sum(cur_panel_gaze_sample_ldx & cur_face_ROI_tick_ldx) > 0
-											cur_gaze2D_sh = scatter(cur_ah, record2D_table.([gaze_src_col_name_stem, '_X'])(cur_panel_gaze_sample_ldx & cur_face_ROI_tick_ldx),  record2D_table.([gaze_src_col_name_stem, '_Y'])(cur_panel_gaze_sample_ldx & cur_face_ROI_tick_ldx), 'filled', 'DisplayName', cur_row_name, 'SizeData', 3, 'MarkerEdgeColor', cur_color, 'MarkerFaceColor', cur_color, 'MarkerFaceAlpha', fixation_alpha, 'MarkerEdgeAlpha', fixation_alpha);
-										end
-									end
-								else	
-									if sum(cur_panel_gaze_sample_ldx) > 0
-										cur_gaze2D_sh = scatter(cur_ah, record2D_table.([gaze_src_col_name_stem, '_X'])(cur_panel_gaze_sample_ldx),  record2D_table.([gaze_src_col_name_stem, '_Y'])(cur_panel_gaze_sample_ldx), 'filled', 'DisplayName', cur_row_name, 'SizeData', 3, 'MarkerEdgeColor', fixation_color, 'MarkerFaceColor', fixation_color, 'MarkerFaceAlpha', fixation_alpha, 'MarkerEdgeAlpha', fixation_alpha);
-									end
-								end
-
-								axis equal
-								hold off
-
-								xlabel(cur_ah,'Azimuth [relative]', 'Interpreter', 'none', 'FontSize', plotting_options_struct.labelfontsize);
-								ylabel(cur_ah, 'Elevation [relative]', 'Interpreter', 'none', 'FontSize', plotting_options_struct.labelfontsize)
-								title(cur_ah, [cur_col_name], 'Interpreter', 'none', 'FontSize', plotting_options_struct.titlefontsize);
-								%subtitle(cur_ah, [cur_plot_set], 'Interpreter', 'none', 'FontSize', plotting_options_struct.subtitlefontsize);
-								subtitle(cur_ah, regexprep(cur_row_name, 'Fixations', ' Fixations'), 'Interpreter', 'none', 'FontSize', plotting_options_struct.subtitlefontsize);
-								%subtitle(cur_ah, ['Partner position: ', cur_face_ROI_name, ' ', cur_set_name, ' trials around ', cur_col_name], 'Interpreter', 'none');
-								%legend('Location','southeast');
-
-								set(gca, 'XLim', [-0.2, 1.2]);
-								set(gca, 'YLim', [-0.1, 1.3]);
-								
-								if (cur_col == 1)
-									[matching_entry_ldx, non_matching_entry_ldx, matching_entry_idx] = fn_find_object_by_field_regexp( cur_ah.Children, 'Type', {'^scatter', '^line'});
-									cur_lh = legend(cur_ah.Children(matching_entry_idx), 'Interpreter', 'none');
-									cur_lh = legend(cur_ah, 'Location', 'southeast', 'FontSize', plotting_options_struct.legendfontsize, 'Box', 'off', 'Interpreter', 'none');
-									cur_ah.Legend.ItemTokenSize=[10,15];	% reduce the length of the displayed line segment in the legen
-								end
-
-							case 'gaze_on_object_proportion'
-								gaze_on_object_proportion.MarkerFaceAlpha = 0.5;
-								gaze_on_object_proportion.MarkerEdgeAlpha = 0.5;
-								gaze_on_object_proportion.data_col_name_list = {...
-									...'A_binocular_eye_on_aims0_PCT',...
-									...'A_binocular_eye_on_aims1_PCT', ...
-									...'A_binocular_eye_on_agent0_PCT',...
-									...'A_binocular_eye_on_agent1_PCT', ...
-									'A_binocular_eye_on_target0_PCT', ...
-									'A_binocular_eye_on_target1_PCT', ...
-									'A_binocular_eye_on_target2_PCT', ...
-									'A_binocular_eye_on_target3_PCT', ...
-									'A_binocular_eye_on_target4_PCT', ...
-									'A_binocular_eye_on_B_facecenter_PCT', ...
-									};
-									
-								% find all relevant rows in gaze_on_object_prop_count_table
-								cur_selected_set_ldx = cur_plot_data_row_ldx & cur_col_data_row_ldx & cur_row_data_row_ldx;
-									
-								cur_data_array = nan([sum(cur_selected_set_ldx), length(gaze_on_object_proportion.data_col_name_list)]);
-								cur_xvec_array = cur_data_array;
-								cur_name_vec = cell(size(gaze_on_object_proportion.data_col_name_list));
-
-
-								add_all_target_fix_pct_col = 1;
-								only_include_all_target_fix_pct = 1;
-
-								all_target_fix_PCT_col = zeros([length(find(cur_selected_set_ldx)), 1]);	% for closest target we can synthesize the all target column by adding the individual target percentages
-
-
-								for i_data_col = 1 : length(gaze_on_object_proportion.data_col_name_list)
-									data_col_name = gaze_on_object_proportion.data_col_name_list{i_data_col};
-									cur_data = gaze_on_object_prop_count_table.(data_col_name)(cur_selected_set_ldx);
-									cur_X_vec = ones(size(cur_data)) * i_data_col;
-									cur_data_array(:, i_data_col) = cur_data;
-									cur_xvec_array(:, i_data_col) = cur_X_vec;
-									cur_name_vec{i_data_col} = regexprep(regexprep(data_col_name, 'A_binocular_eye_on_', ''), '_PCT', '');
-									cur_name_vec{i_data_col} = regexprep(cur_name_vec{i_data_col}, 'B_facecenter', 'face');
-									% get the proper target type
-									if (contains(cur_name_vec(i_data_col), regexpPattern('target[0-9]'))) && ~isempty(cur_data)
-
-										all_target_fix_PCT_col = all_target_fix_PCT_col + cur_data;
-
-										% get the cycle/trial number
-										cur_cycle = gaze_on_object_prop_count_table.cycle(find(cur_selected_set_ldx, 1, 'first'));
-										% get record2D tick index from
-										% triallog for that cycle
-										cur_tick_idx = triallog_table.collection_start_tick_idx(find(triallog_table.trial_num == cur_cycle, 1 , 'first'));
-										cur_target_id = record2D_table.([cur_name_vec{i_data_col}, '_id'])(cur_tick_idx);
-										% see enum_struct.target_id.name_list'
-										switch cur_target_id
-											case 0	% cooperative_targets_type_0
-												cur_name_vec{i_data_col} = 'coop_A';
-											case 1	% cooperative_targets_type_1
-												cur_name_vec{i_data_col} = 'coop_B';
-											case 2	% competitive_targets
-												cur_name_vec{i_data_col} = 'comp';
-											case 3 % punishing_targets
-												cur_name_vec{i_data_col} = 'pun';
-											case 4	% solo_targets_type_0
-												cur_name_vec{i_data_col} = 'Solo_A';
-											case 5	% solo_targets_type_1
-												cur_name_vec{i_data_col} = 'Solo_B';
-										end
-									end
-								end
-
-								ignore_target_col_ldx = false(size(cur_name_vec));
-								if (add_all_target_fix_pct_col)
-									% we add this as first column
-									cur_data_array = [all_target_fix_PCT_col, cur_data_array];
-									cur_xvec_array(:, end+1) = ones(size(cur_data)) * length(gaze_on_object_proportion.data_col_name_list) + 1;
-									cur_name_vec = ['Targets', cur_name_vec];
-									
-									% if we only want aggregate target
-									% fixations remove the inividual target
-									% columns
-									ignore_target_col_ldx = false(size(cur_name_vec));
-
-									if (only_include_all_target_fix_pct)
-										ignore_target_col_ldx = ismember(cur_name_vec, {'coop_A', 'coop_B', 'comp', 'pun', 'Solo_A', 'Solo_B', 'target0', 'target1', 'target2', 'target3', 'target4', 'target5', 'target6', 'target7', 'target8', 'target9'});
-									end
-								end
-
-								include_col_ldx = ~ignore_target_col_ldx;
-
-								% shape down to included columns
-								if any(ignore_target_col_ldx)
-									cur_name_vec(ignore_target_col_ldx) = [];
-									cur_data_array(:, ignore_target_col_ldx) = [];
-									% this next one just gives the x values
-									% which we want to increment from 1
-									cur_xvec_array = cur_xvec_array(:, 1:sum(include_col_ldx));
-								end
-								
-								% now do some statistics across the
-								% selected columns?
-
-
-
-								hold on
-								if ~all(isnan(cur_data_array(:)))
-									swarmchart(cur_ah, cur_xvec_array, cur_data_array, 'filled', 'MarkerFaceAlpha', gaze_on_object_proportion.MarkerFaceAlpha, 'MarkerEdgeAlpha', gaze_on_object_proportion.MarkerEdgeAlpha, 'DisplayName', ['prop' '_', cur_row_name], 'SizeData', 3);
-									boxplot(cur_ah, cur_data_array, 'Symbol','');	% show no outliers, as we already show a swarmplot
-								
-
-									%xlabel(cur_ah,'gaze target', 'Interpreter', 'none', 'FontSize', plotting_options_struct.labelfontsize);
-									xticklabels(cur_name_vec)
-									ylabel(cur_ah, 'Proportion of gaze samples [%]', 'Interpreter', 'none', 'FontSize', plotting_options_struct.labelfontsize)
-									%title(cur_ah, [cur_col_name], 'Interpreter', 'none', 'FontSize', plotting_options_struct.titlefontsize);
-									%subtitle(cur_ah, '', 'Interpreter', 'none', 'FontSize', plotting_options_struct.subitlefontsize);
-								end
-
-							otherwise
-								error([mfilename, ': ERROR: unkown cur_panel_type: ', cur_panel_type]);
-						end
-
-					end
-
-				end
-			end
-
-			title(cur_fh_th, [cur_figure_stem, ', N_cycles : ', num2str(length(cur_plot_set_cycle_list))], 'Interpreter', 'none', 'FontSize', plotting_options_struct.titlefontsize+2);
-
-			cur_out_FQN = fullfile(out_dir, 'per_session', [cur_figure_stem, '.', gaze_src_col_name_stem, '.', 'gaze2D_gaze_prop', '.pdf']);
-			disp(['Saving figure as: ', cur_out_FQN]);
-			write_out_figure(cur_fh, cur_out_FQN, [], [], plotting_options_struct.format_string_list);
-		end
+		cur_plot_fh_list = fn_plot_by_plot_col_row_panel_sets( ...
+			triallog_table, valid_cycle_ldx, triallog_cycle_key_list, record2D_table, valid_gaze_sample_ldx, per_state_valid_tick_sessionID_cycle_per_cycle_idx_cellarray, ...
+			gaze_on_object_prop_count_table, goopc_table_cycle_key_list, near_gaze_sample_ldx, far_gaze_sample_ldx, ...
+			target_ignore_list, face_ROI, ...
+			panel_request_list, short_all_epoch_name_list, gaze_src_col_name_stem, ...
+			plot_unique_keys, plot_set_include_regexplist_list, plot_data_row_key_idx_arr, ...
+			col_unique_keys, sorted_col_set_list, col_data_row_key_idx_arr, ...
+			row_unique_keys, sorted_row_set_list, row_data_row_key_idx_arr, ...
+			aggregation_type_string, out_dir, plotting_options_struct );
 	end
-
-
-
 
 
 	if (show_2D_fixations)
@@ -1024,12 +877,115 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 	% restrict to runs	triallog_table.src_run_idx
 
+	% now merge the relevant data of all sessions:
+
+
 
 	timestamps.(mfilename).(varname_session_id).end = toc(timestamps.(mfilename).(varname_session_id).start);
 	cur_duration_s = timestamps.(mfilename).(varname_session_id).end;
 	disp([mfilename, ': ', proto_varname_session_id, ' took: ', num2str(timestamps.(mfilename).(varname_session_id).end), ' seconds (', num2str(floor(cur_duration_s/(60*60))), ' hours ', num2str(floor(rem(cur_duration_s, 3600)/60)), ' minutes ', num2str(mod(cur_duration_s, 60)), ' seconds).']);
 end
 
+if (plot_2d_and_object_proportions_xsession)
+	% sample based, recreate here to avoid having to collect in
+	% xsession (we need to also define these per session earlier for the proportion calculations)
+	%min_gaze_confidence = 0.85;%
+	%gaze_src_col_name_stem = 'A_binocular_eye';
+	valid_gaze_sample_ldx = xsession.record2D_table.([gaze_src_col_name_stem, '_confidence']) >= min_gaze_confidence;
+	near_gaze_sample_ldx = xsession.record2D_table.([gaze_src_col_name_stem, '_dX']) <= mean_dX_CCF_threshold;
+	far_gaze_sample_ldx = xsession.record2D_table.([gaze_src_col_name_stem, '_dX']) > mean_dX_CCF_threshold;
+
+	cycle_duration_list = xsession.triallog_table.cycle_end_s - xsession.triallog_table.cycle_start_s;
+	exclude_cycle_ldx =  cycle_duration_list > max_cycle_duration_s;
+	exclude_tick_ldx = xsession.record2D_table.timestamp > 0;
+
+	% invert logic to exclude by default
+	for i_cycle = 1 : length(exclude_cycle_ldx)
+		if ~exclude_cycle_ldx(i_cycle)
+			cur_trial_start_tick_idx = xsession.triallog_table.cycle_start_tick_idx(i_cycle);
+			cur_trial_end_tick_idx = xsession.triallog_table.cycle_end_tick_idx(i_cycle) ;
+			if (cur_trial_start_tick_idx > 0) && (cur_trial_end_tick_idx > 0)
+				exclude_tick_ldx(cur_trial_start_tick_idx:cur_trial_end_tick_idx) = false;
+			end
+		end
+	end
+
+	invalid_cycle_ldx = ismember(xsession.triallog_table.collection_type, {'None'});
+	valid_cycle_ldx = ~invalid_cycle_ldx & ~exclude_cycle_ldx;
+
+
+
+	% repeat so we have this for the merged data as well instead of
+	% collectiong it in xsession....
+	target_state_col_ldx = contains(xsession.triallog_table.Properties.VariableNames, regexpPattern('^col_targ_\w*_tick_idx$'));
+	target_state_end_col_ldx = contains(xsession.triallog_table.Properties.VariableNames, regexpPattern('^col_targ_\w*_end_tick_idx$'));
+	target_state_start_col_ldx = target_state_col_ldx & ~target_state_end_col_ldx;
+	target_state_start_name_list = xsession.triallog_table.Properties.VariableNames(target_state_start_col_ldx);
+	target_state_end_name_list = xsession.triallog_table.Properties.VariableNames(target_state_end_col_ldx);
+	target_state_name_list = regexprep(target_state_start_name_list, '_tick_idx', '');
+	all_epoch_name_list = [target_state_name_list, additional_state_name_list];
+	short_all_epoch_name_list = fn_shorten_object_name_list(all_epoch_name_list);
+
+
+
+
+	%plot_set_ldx_list = {dyadic_cycle_ldx, solo_cycle_ldx};
+	plot_set_include_regexplist_list = {'dyadic', 'solo'};
+	%plot_set_include_regexplist_list = {'solo'};
+
+	% which epochs to show in which sequence
+	sorted_col_set_list = {'Acquisition', 'CTS_collecting', 'CTS_rewarding', 'CTS_pre_acquisition'};
+	sorted_row_set_list = {'nearFixations', 'farFixations'};
+
+	% figure out which cycles to include per plot from triallog
+	cur_key_col_list = {'solo_dyadic'};% was {'sessionID', 'trial_num'}; but for xsession we do not want per-session plots...
+	%cur_key_col_list = {'solo_dyadic', 'B_facecenter_XY'};% was {'sessionID', 'trial_num'}; but for xsession we do not want per-session plots...
+
+	[ plot_key_list, plot_existing_keyfields_ldx, plot_unique_keys, plot_data_row_key_idx_arr, plot_unique_keys_count_list ] = fn_generate_key_from_selected_table_columns_CCF(cur_key_col_list, xsession.triallog_table, '_');
+
+	% triallog effective cycle_number (
+	cur_key_col_list = {'sessionID', 'trial_num'};
+	[triallog_cycle_key_list, triallog_cycle_existing_keyfields_ldx, triallog_cycle_unique_keys, triallog_cycle_data_row_key_idx_arr, triallog_cycle_unique_keys_count_list ] = fn_generate_key_from_selected_table_columns_CCF(cur_key_col_list, xsession.triallog_table, '_');
+
+
+	% gaze_on_object_prop_count_table effective cycle_number (
+	cur_key_col_list = {'sessionID', 'cycle'};
+	[goopc_table_cycle_key_list, goopc_table__cycle_existing_keyfields_ldx, goopc_table_cycle_unique_keys, goopc_table_cycle_data_row_key_idx_arr, goopc_table_cycle_unique_keys_count_list ] = fn_generate_key_from_selected_table_columns_CCF(cur_key_col_list, xsession.gaze_on_object_prop_count_table, '_');
+
+
+
+	% figure out which columns
+	cur_key_col_list = {'epoch'};
+	[ col_key_list, col_existing_keyfields_ldx, col_unique_keys, col_data_row_key_idx_arr, col_unique_keys_count_list ] = fn_generate_key_from_selected_table_columns_CCF(cur_key_col_list, xsession.gaze_on_object_prop_count_table, '_');
+	% n_cols = length(col_unique_keys);
+	% if exist('sorted_col_set_list', 'var') && ~isempty(sorted_col_set_list)
+	% 	n_cols = length(sorted_col_set_list);
+	% end
+
+
+	% figure out which rows
+	cur_key_col_list = {'vergence'};
+	[ row_key_list, row_existing_keyfields_ldx, row_unique_keys, row_data_row_key_idx_arr, row_unique_keys_count_list ] = fn_generate_key_from_selected_table_columns_CCF(cur_key_col_list, xsession.gaze_on_object_prop_count_table, '_');
+	% n_rows = length(row_unique_keys);
+	% if exist('sorted_col_set_list', 'var') && ~isempty(sorted_col_set_list)
+	% 	n_rows = length(sorted_row_set_list);
+	% end
+	% we also want to step through these as additional rows
+	panel_request_list = {'gaze2D_per_epoch', 'gaze_on_object_proportion'};
+	% n_panels = length(panel_request_list);
+
+	target_ignore_list = {'coop_A', 'coop_B', 'comp', 'pun', 'Solo_A', 'Solo_B', 'target0', 'target1', 'target2', 'target3', 'target4', 'target5', 'target6', 'target7', 'target8', 'target9'};
+	aggregation_type_string = 'across_sessions';
+	cur_plot_fh_list = fn_plot_by_plot_col_row_panel_sets( ...
+		xsession.triallog_table, valid_cycle_ldx, triallog_cycle_key_list, xsession.record2D_table, valid_gaze_sample_ldx, xsession.per_state_valid_tick_sessionID_cycle_per_cycle_idx_cellarray, ...
+		xsession.gaze_on_object_prop_count_table, goopc_table_cycle_key_list, near_gaze_sample_ldx, far_gaze_sample_ldx, ...
+		target_ignore_list, xsession.face_ROI, ...
+		panel_request_list, short_all_epoch_name_list, gaze_src_col_name_stem, ...
+		plot_unique_keys, plot_set_include_regexplist_list, plot_data_row_key_idx_arr, ...
+		col_unique_keys, sorted_col_set_list, col_data_row_key_idx_arr, ...
+		row_unique_keys, sorted_row_set_list, row_data_row_key_idx_arr, ...
+		aggregation_type_string, out_dir, plotting_options_struct );
+end
 
 % final end...
 timestamps.(mfilename).end = toc(timestamps.(mfilename).start);
