@@ -469,6 +469,13 @@ triallog_table.trial_end_s = nan(size(triallog_table.collection_num));
 triallog_table.trial_start_tick_idx = nan(size(triallog_table.collection_num));
 triallog_table.trial_end_tick_idx = nan(size(triallog_table.collection_num));
 
+% preallocate so the position is convenient
+triallog_table.cycle = nan(size(triallog_table.collection_num));
+triallog_table.cycle_start_s = nan(size(triallog_table.collection_num));
+triallog_table.cycle_start_tick_idx = nan(size(triallog_table.collection_num));
+triallog_table.cycle_end_s = nan(size(triallog_table.collection_num));
+triallog_table.cycle_end_tick_idx = nan(size(triallog_table.collection_num));
+
 triallog_table.collected_by_A = nan(size(triallog_table.collection_num));
 triallog_table.collected_by_B = nan(size(triallog_table.collection_num));
 triallog_table.collection_type = cell(size(triallog_table.collection_num));
@@ -701,14 +708,26 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 			triallog_table.(['col_targ_', cur_target_state_name, '_start_s'])(cur_trial_num) = record2D_table.timestamp(local_cur_tick_idx);	% TODO or use tick_timestamp from sorted_target_state_transition_table
 			triallog_table.(['col_targ_', cur_target_state_name, '_tick_idx'])(cur_trial_num) = local_cur_tick_idx;
 
-			% this is mainly useful for epochs with variable length...
-			if cur_sorted_target_state_transition_table_row_idx < size(sorted_target_state_transition_table, 1)
-				triallog_table.(['col_targ_', cur_target_state_name, '_end_s'])(cur_trial_num) = sorted_target_state_transition_table.tick_timestamp(cur_sorted_target_state_transition_table_row_idx+1);	% TODO or use tick_timestamp from sorted_target_state_transition_table
-				triallog_table.(['col_targ_', cur_target_state_name, '_end_tick_idx'])(cur_trial_num) = sorted_target_state_transition_table.tick_idx(cur_sorted_target_state_transition_table_row_idx+1);
-			else
-				triallog_table.(['col_targ_', cur_target_state_name, '_end_s'])(cur_trial_num) = 0;
-				triallog_table.(['col_targ_', cur_target_state_name, '_end_s'])(cur_trial_num) = 0;
+			% % this is mainly useful for epochs with variable length...
+			% if cur_sorted_target_state_transition_table_row_idx < size(sorted_target_state_transition_table, 1)
+			% 	triallog_table.(['col_targ_', cur_target_state_name, '_end_s'])(cur_trial_num) = sorted_target_state_transition_table.tick_timestamp(cur_sorted_target_state_transition_table_row_idx+1);	% TODO or use tick_timestamp from sorted_target_state_transition_table
+			% 	triallog_table.(['col_targ_', cur_target_state_name, '_end_tick_idx'])(cur_trial_num) = sorted_target_state_transition_table.tick_idx(cur_sorted_target_state_transition_table_row_idx+1);
+			% else
+			% 	triallog_table.(['col_targ_', cur_target_state_name, '_end_s'])(cur_trial_num) = 0;
+			% 	triallog_table.(['col_targ_', cur_target_state_name, '_end_s'])(cur_trial_num) = 0;
+			% end
+
+			% End = next transition on the SAME collected target (not blind global row+1).
+			cur_state_start_tick_idx = local_cur_tick_idx;
+			cur_state_end_tick_idx = fn_find_next_target_transition_tick_idx( ...
+				sorted_target_state_transition_table, cur_target_IDX, cur_state_start_tick_idx, ...
+				triallog_table.trial_end_tick_idx(cur_trial_num) );
+
+			if ~isnan(cur_state_end_tick_idx) && (cur_state_end_tick_idx > 0)
+				triallog_table.(['col_targ_', cur_target_state_name, '_end_tick_idx'])(cur_trial_num) = cur_state_end_tick_idx;
+				triallog_table.(['col_targ_', cur_target_state_name, '_end_s'])(cur_trial_num) = record2D_table.timestamp(cur_state_end_tick_idx);
 			end
+
 
 
 			% add the aim and agent positions as well at the state transitions?
@@ -870,55 +889,92 @@ for i_initiate_reward_start_transition = 1 : length(initiate_reward_start_transi
 	% trial_start_s(N+1), that is we have no
 	% find the end of the current reward phase
 	%trial_end_s
+
+
 	cur_transition_search_idx = cur_initiate_reward_start_transition_idx;
 	while true
-		triallog_table.cycle(cur_trial_num) = cur_trial_num;
 		cur_transition_search_idx = cur_transition_search_idx + 1;
-		%check whether we reached the end
 		if cur_transition_search_idx > size(sorted_target_state_transition_table, 1)
-			% use the first timestamp, or nan?
 			triallog_table.trial_end_s(cur_trial_num) = record2D_table.timestamp(end);
 			triallog_table.trial_end_tick_idx(cur_trial_num) = size(record2D_table, 1);
 			break
 		end
-		% we want a specific transition for the current IDX
-		if (sorted_target_state_transition_table.target_IDX(cur_transition_search_idx) == sorted_target_state_transition_table.target_IDX(cur_initiate_reward_start_transition_idx)) ...
-				&& (contains(sorted_target_state_transition_table.old_state_ENUM_name(cur_transition_search_idx), 'rewarding') && contains(sorted_target_state_transition_table.new_state_ENUM_name(cur_transition_search_idx), 'pre_acquisition'))
+		if (sorted_target_state_transition_table.target_IDX(cur_transition_search_idx) == ...
+				sorted_target_state_transition_table.target_IDX(cur_initiate_reward_start_transition_idx)) ...
+				&& contains(sorted_target_state_transition_table.old_state_ENUM_name(cur_transition_search_idx), 'rewarding') ...
+				&& contains(sorted_target_state_transition_table.new_state_ENUM_name(cur_transition_search_idx), 'pre_acquisition')
 			triallog_table.trial_end_s(cur_trial_num) = sorted_target_state_transition_table.tick_timestamp(cur_transition_search_idx);
 			triallog_table.trial_end_tick_idx(cur_trial_num) = sorted_target_state_transition_table.tick_idx(cur_transition_search_idx);
-
-			if cur_trial_num == 1
-				triallog_table.cycle_start_tick_idx(1) = 1;
-				triallog_table.cycle_start_s(1) = record2D_table.timestamp(triallog_table.cycle_start_tick_idx(1));
-			else
-				if ~isnan(triallog_table.col_targ_pre_acquisition_end_tick_idx(cur_trial_num - 1))
-					triallog_table.cycle_start_tick_idx(cur_trial_num) = triallog_table.col_targ_pre_acquisition_end_tick_idx(cur_trial_num - 1);	% at the tick of the state change... from the previous cycle
-					if triallog_table.cycle_start_tick_idx(cur_trial_num) > 0
-						triallog_table.cycle_start_s(cur_trial_num) = record2D_table.timestamp(triallog_table.cycle_start_tick_idx(cur_trial_num));
-					else
-						triallog_table.cycle_start_s(cur_trial_num) = nan;
-					end
-				end
-			end
-			
-			triallog_table.cycle_end_tick_idx(cur_trial_num) = triallog_table.col_targ_pre_acquisition_end_tick_idx(cur_trial_num) - 1; % one tick before the state change...
-			if triallog_table.cycle_end_tick_idx(cur_trial_num) > 0
-				triallog_table.cycle_end_s(cur_trial_num) =  record2D_table.timestamp(triallog_table.cycle_end_tick_idx(cur_trial_num));
-			else
-				triallog_table.cycle_end_s(cur_trial_num) = nan;
-			end
-			
 			break
 		end
 	end
 
-	% loop over the cycles and 
+	% cycle_start/end and record2D.cycle are assigned in the post-pass below
+	% (after pre_acquisition ends are repaired on the full triallog).
 
-	if (triallog_table.cycle_start_tick_idx(cur_trial_num) > 0) && (triallog_table.cycle_end_tick_idx(cur_trial_num) > 0)
-		record2D_table.cycle(triallog_table.cycle_start_tick_idx(cur_trial_num):triallog_table.cycle_end_tick_idx(cur_trial_num)) = cur_trial_num;
-	else
-		%disp('Doh...');
-	end
+
+	% cur_transition_search_idx = cur_initiate_reward_start_transition_idx;
+	% while true
+	% 	triallog_table.cycle(cur_trial_num) = cur_trial_num;
+	% 	cur_transition_search_idx = cur_transition_search_idx + 1;
+	% 	%check whether we reached the end
+	% 	if cur_transition_search_idx > size(sorted_target_state_transition_table, 1)
+		% 	% use the first timestamp, or nan?
+		% 	triallog_table.trial_end_s(cur_trial_num) = record2D_table.timestamp(end);
+		% 	triallog_table.trial_end_tick_idx(cur_trial_num) = size(record2D_table, 1);
+		% 	break
+	% 	end
+	% 	% we want a specific transition for the current IDX
+	% 	if (sorted_target_state_transition_table.target_IDX(cur_transition_search_idx) == sorted_target_state_transition_table.target_IDX(cur_initiate_reward_start_transition_idx)) ...
+			% 	&& (contains(sorted_target_state_transition_table.old_state_ENUM_name(cur_transition_search_idx), 'rewarding') && contains(sorted_target_state_transition_table.new_state_ENUM_name(cur_transition_search_idx), 'pre_acquisition'))
+		% 	triallog_table.trial_end_s(cur_trial_num) = sorted_target_state_transition_table.tick_timestamp(cur_transition_search_idx);
+		% 	triallog_table.trial_end_tick_idx(cur_trial_num) = sorted_target_state_transition_table.tick_idx(cur_transition_search_idx);
+	% 
+		% 	if cur_trial_num == 1
+			% 	triallog_table.cycle_start_tick_idx(1) = 1;
+			% 	triallog_table.cycle_start_s(1) = record2D_table.timestamp(triallog_table.cycle_start_tick_idx(1));
+		% 	else
+			% 	if ~isnan(triallog_table.col_targ_pre_acquisition_end_tick_idx(cur_trial_num - 1))
+			% 		triallog_table.cycle_start_tick_idx(cur_trial_num) = triallog_table.col_targ_pre_acquisition_end_tick_idx(cur_trial_num - 1);	% at the tick of the state change... from the previous cycle
+			% 		if triallog_table.cycle_start_tick_idx(cur_trial_num) > 0
+			% 			triallog_table.cycle_start_s(cur_trial_num) = record2D_table.timestamp(triallog_table.cycle_start_tick_idx(cur_trial_num));
+			% 		else
+			% 			triallog_table.cycle_start_s(cur_trial_num) = nan;
+			% 		end
+			% 	end
+		% 	end
+	% 
+		% 	triallog_table.cycle_end_tick_idx(cur_trial_num) = triallog_table.col_targ_pre_acquisition_end_tick_idx(cur_trial_num) - 1; % one tick before the state change...
+		% 	if triallog_table.cycle_end_tick_idx(cur_trial_num) > 0
+			% 	triallog_table.cycle_end_s(cur_trial_num) =  record2D_table.timestamp(triallog_table.cycle_end_tick_idx(cur_trial_num));
+		% 	else
+			% 	triallog_table.cycle_end_s(cur_trial_num) = nan;
+		% 	end
+	% 
+		% 	break
+	% 	end
+	% end
+	% 
+	% % loop over the cycles and 
+	% 
+	% if (triallog_table.cycle_start_tick_idx(cur_trial_num) > 0) && (triallog_table.cycle_end_tick_idx(cur_trial_num) > 0)
+	% 	record2D_table.cycle(triallog_table.cycle_start_tick_idx(cur_trial_num):triallog_table.cycle_end_tick_idx(cur_trial_num)) = triallog_table.trial_num(cur_trial_num);
+	% else
+	% 	%disp('Doh...');
+	% end
+	% 
+	% % % fallback when cycle_start/end failed (common on merged run boundaries)
+	% % if (triallog_table.cycle_start_tick_idx(cur_trial_num) > 0) && ...
+	% %    (triallog_table.cycle_end_tick_idx(cur_trial_num) > 0)
+	% % 	lo_idx = triallog_table.cycle_start_tick_idx(cur_trial_num);
+	% % 	hi_idx = triallog_table.cycle_end_tick_idx(cur_trial_num);
+	% % else
+	% %     lo_idx = triallog_table.trial_start_tick_idx(cur_trial_num);
+	% % 	hi_idx = triallog_table.trial_end_tick_idx(cur_trial_num);
+	% % end
+	% % if (lo_idx > 0) && (hi_idx > 0) && (hi_idx >= lo_idx)
+	% % 	record2D_table.cycle(lo_idx:hi_idx) = triallog_table.trial_num(cur_trial_num);
+	% % end
 
 	% did a target change position in this trial
 	for i_target_IDX = 1 : length(target_prefix_list)
@@ -957,6 +1013,176 @@ end
 % 	orig_triallog_table = triallog_table;
 % 	triallog_table = triallog_table(~isnan(triallog_table.col_targ_pre_acquisition_tick_idx), :);
 % end
+
+
+% =========================================================================
+% Post-pass: align triallog cycle bounds with record2D.cycle
+% =========================================================================
+% The per-trial loop above fills epoch columns from a reduced per-collection
+% transition set. For merged multi-run sessions (e.g. 60501 MIXED) the
+% col_targ_pre_acquisition_end_tick_idx values can be wrong when epoch ends
+% were taken from sorted_target_state_transition_table(row+1) across targets.
+%
+% Downstream, cycle_start_tick_idx / cycle_end_tick_idx are derived from those
+% pre_acquisition ends, and record2D.cycle is stamped from the cycle span.
+% If pre_acquisition ends are wrong, record2D.cycle stays 0 on affected ticks
+% while triallog keys use trial_num -> broken key match in gaze 2D plots.
+%
+% This block:
+%   (A) re-derives col_targ_pre_acquisition end from the global transition table
+%   (B) recomputes cycle_start/end in trial_num order
+%   (C) stamps record2D.cycle from the repaired triallog bounds
+% =========================================================================
+disp([mfilename, ': INFO: repairing col_targ_pre_acquisition ends and cycle bounds.']);
+
+n_triallog_rows = height(triallog_table);
+
+% row order for cycle chaining: previous cycle ends at pre_acquisition->waiting
+triallog_row_ordered_by_trial_num_idx = (1:n_triallog_rows).';
+if ismember({'trial_num'}, triallog_table.Properties.VariableNames)
+	[~, triallog_row_ordered_by_trial_num_idx] = sort(triallog_table.trial_num, 'ascend');
+end
+
+% -------------------------------------------------------------------------
+% (A) Repair col_targ_pre_acquisition start/end per triallog row
+% -------------------------------------------------------------------------
+% trial_end_tick_idx marks rewarding -> pre_acquisition (start of pre_acq).
+% col_targ_pre_acquisition_end_tick_idx marks pre_acquisition -> waiting_for_agent.
+% Search only between those bounds (and before the next trial's ITI shuffle).
+for i_triallog_row = 1 : n_triallog_rows
+
+	cur_col_targ_IDX = triallog_table.col_targ_IDX(i_triallog_row);
+	cur_trial_end_tick_idx = triallog_table.trial_end_tick_idx(i_triallog_row);
+
+	if isnan(cur_col_targ_IDX) || isnan(cur_trial_end_tick_idx) || (cur_trial_end_tick_idx <= 0)
+		continue
+	end
+
+	% upper search bound: next trial's shuffle (pre_acquisition -> waiting_for_agent)
+	cur_pre_acquisition_end_search_hi_tick_idx = size(record2D_table, 1);
+	i_cur_trial_num_order = find(triallog_row_ordered_by_trial_num_idx == i_triallog_row, 1, 'first');
+	if (i_cur_trial_num_order < n_triallog_rows)
+		i_next_triallog_row = triallog_row_ordered_by_trial_num_idx(i_cur_trial_num_order + 1);
+		cur_next_trial_start_tick_idx = triallog_table.trial_start_tick_idx(i_next_triallog_row);
+		if ~isnan(cur_next_trial_start_tick_idx) && (cur_next_trial_start_tick_idx > 0)
+			cur_pre_acquisition_end_search_hi_tick_idx = cur_next_trial_start_tick_idx;
+		end
+	end
+
+	% global transition: pre_acquisition -> waiting_for_agent on collected target
+	cur_pre_acquisition_end_transition_hit_ldx = pre_acquisition_end_transition_ldx ...
+		& (sorted_target_state_transition_table.target_IDX == cur_col_targ_IDX) ...
+		& (sorted_target_state_transition_table.tick_idx > cur_trial_end_tick_idx) ...
+		& (sorted_target_state_transition_table.tick_idx <= cur_pre_acquisition_end_search_hi_tick_idx);
+
+	% merged sessions: do not pick a transition from a different run_idx
+	if merged_session && ismember({'src_run_idx'}, triallog_table.Properties.VariableNames) ...
+			&& ~isnan(triallog_table.src_run_idx(i_triallog_row))
+		cur_src_run_idx = triallog_table.src_run_idx(i_triallog_row) - 1;	% record2D.run_idx is 0-based
+		cur_transition_tick_idx_list = sorted_target_state_transition_table.tick_idx;
+		cur_pre_acquisition_end_transition_hit_ldx = cur_pre_acquisition_end_transition_hit_ldx ...
+			& (record2D_table.run_idx(cur_transition_tick_idx_list) == cur_src_run_idx);
+	end
+
+	cur_pre_acquisition_end_transition_hit_idx = find(cur_pre_acquisition_end_transition_hit_ldx, 1, 'first');
+	if isempty(cur_pre_acquisition_end_transition_hit_idx)
+		disp([mfilename, ': WARN: no col_targ_pre_acquisition end for trial_num=', ...
+			num2str(triallog_table.trial_num(i_triallog_row)), ' (triallog row ', num2str(i_triallog_row), ').']);
+		continue
+	end
+
+	cur_col_targ_pre_acquisition_end_tick_idx = sorted_target_state_transition_table.tick_idx(cur_pre_acquisition_end_transition_hit_idx);
+
+	% start of pre_acquisition epoch = trial_end (rewarding -> pre_acquisition)
+	triallog_table.col_targ_pre_acquisition_tick_idx(i_triallog_row) = cur_trial_end_tick_idx;
+	triallog_table.col_targ_pre_acquisition_start_s(i_triallog_row) = record2D_table.timestamp(cur_trial_end_tick_idx);
+	triallog_table.col_targ_pre_acquisition_end_tick_idx(i_triallog_row) = cur_col_targ_pre_acquisition_end_tick_idx;
+	triallog_table.col_targ_pre_acquisition_end_s(i_triallog_row) = ...
+		sorted_target_state_transition_table.tick_timestamp(cur_pre_acquisition_end_transition_hit_idx);
+end
+
+% -------------------------------------------------------------------------
+% (B) Recompute cycle_start_tick_idx / cycle_end_tick_idx in trial_num order
+% -------------------------------------------------------------------------
+% cycle spans from the previous trial's pre_acquisition end (ITI shuffle) to
+% the last tick before the current trial's pre_acquisition end.
+for i_trial_num_order = 1 : n_triallog_rows
+
+	i_triallog_row = triallog_row_ordered_by_trial_num_idx(i_trial_num_order);
+	cur_col_targ_pre_acquisition_end_tick_idx = triallog_table.col_targ_pre_acquisition_end_tick_idx(i_triallog_row);
+
+	if (i_trial_num_order == 1)
+		cur_cycle_start_tick_idx = 1;
+	else
+		i_prev_triallog_row = triallog_row_ordered_by_trial_num_idx(i_trial_num_order - 1);
+		prev_col_targ_pre_acquisition_end_tick_idx = triallog_table.col_targ_pre_acquisition_end_tick_idx(i_prev_triallog_row);
+
+		if ~isnan(prev_col_targ_pre_acquisition_end_tick_idx) && (prev_col_targ_pre_acquisition_end_tick_idx > 0)
+			cur_cycle_start_tick_idx = prev_col_targ_pre_acquisition_end_tick_idx;
+		elseif ~isnan(triallog_table.trial_start_tick_idx(i_triallog_row)) && (triallog_table.trial_start_tick_idx(i_triallog_row) > 0)
+			% fallback only when previous pre_acquisition end is missing
+			cur_cycle_start_tick_idx = triallog_table.trial_start_tick_idx(i_triallog_row);
+		else
+			cur_cycle_start_tick_idx = NaN;
+		end
+	end
+
+	if ~isnan(cur_col_targ_pre_acquisition_end_tick_idx) && (cur_col_targ_pre_acquisition_end_tick_idx > 1)
+		cur_cycle_end_tick_idx = cur_col_targ_pre_acquisition_end_tick_idx - 1;
+	else
+		cur_cycle_end_tick_idx = NaN;
+	end
+
+	triallog_table.cycle_start_tick_idx(i_triallog_row) = cur_cycle_start_tick_idx;
+	triallog_table.cycle_end_tick_idx(i_triallog_row) = cur_cycle_end_tick_idx;
+
+	if ~isnan(cur_cycle_start_tick_idx) && (cur_cycle_start_tick_idx > 0)
+		triallog_table.cycle_start_s(i_triallog_row) = record2D_table.timestamp(cur_cycle_start_tick_idx);
+	else
+		triallog_table.cycle_start_s(i_triallog_row) = NaN;
+	end
+	if ~isnan(cur_cycle_end_tick_idx) && (cur_cycle_end_tick_idx > 0)
+		triallog_table.cycle_end_s(i_triallog_row) = record2D_table.timestamp(cur_cycle_end_tick_idx);
+	else
+		triallog_table.cycle_end_s(i_triallog_row) = NaN;
+	end
+
+	% triallog.cycle mirrors trial_num (analysis cycle id, not record2D.cycle)
+	triallog_table.cycle(i_triallog_row) = triallog_table.trial_num(i_triallog_row);
+end
+
+% -------------------------------------------------------------------------
+% (C) Stamp record2D.cycle from repaired triallog cycle spans
+% -------------------------------------------------------------------------
+if ~ismember({'cycle'}, record2D_table.Properties.VariableNames)
+	record2D_table.cycle = zeros(size(record2D_table, 1), 1);
+else
+	record2D_table.cycle(:) = 0;
+end
+
+n_trials_without_record2D_cycle_stamp = 0;
+for i_triallog_row = 1 : n_triallog_rows
+
+	cur_cycle_stamp_lo_tick_idx = triallog_table.cycle_start_tick_idx(i_triallog_row);
+	cur_cycle_stamp_hi_tick_idx = triallog_table.cycle_end_tick_idx(i_triallog_row);
+
+	if isnan(cur_cycle_stamp_lo_tick_idx) || isnan(cur_cycle_stamp_hi_tick_idx) ...
+			|| (cur_cycle_stamp_lo_tick_idx <= 0) || (cur_cycle_stamp_hi_tick_idx <= 0) ...
+			|| (cur_cycle_stamp_hi_tick_idx < cur_cycle_stamp_lo_tick_idx)
+		n_trials_without_record2D_cycle_stamp = n_trials_without_record2D_cycle_stamp + 1;
+		continue
+	end
+
+	record2D_table.cycle(cur_cycle_stamp_lo_tick_idx:cur_cycle_stamp_hi_tick_idx) = triallog_table.trial_num(i_triallog_row);
+end
+
+if (n_trials_without_record2D_cycle_stamp > 0)
+	disp([mfilename, ': WARN: ', num2str(n_trials_without_record2D_cycle_stamp), ...
+		' triallog rows could not stamp record2D.cycle (invalid cycle span).']);
+end
+
+
+
 
 % this is Igor's criterion
 % the last trial/trials might be unfinished. To reduce the set to complete
@@ -1031,3 +1257,25 @@ disp([mfilename, ' took: ', num2str(timestamps.(mfilename).end / 60), ' minutes.
 
 end
 
+
+
+
+function end_tick_idx = fn_find_next_target_transition_tick_idx( ...
+		sorted_target_state_transition_table, target_IDX, start_tick_idx, search_hi_tick_idx)
+
+	end_tick_idx = NaN;
+	if isnan(start_tick_idx) || start_tick_idx <= 0
+		return
+	end
+	if isnan(search_hi_tick_idx) || search_hi_tick_idx <= 0
+		search_hi_tick_idx = inf;
+	end
+
+	cand_ldx = find(sorted_target_state_transition_table.target_IDX == target_IDX ...
+		& sorted_target_state_transition_table.tick_idx > start_tick_idx ...
+		& sorted_target_state_transition_table.tick_idx <= search_hi_tick_idx, 1, 'first');
+
+	if ~isempty(cand_ldx)
+		end_tick_idx = sorted_target_state_transition_table.tick_idx(cand_ldx);
+	end
+end
