@@ -19,7 +19,7 @@ out_struct.vergence = '';
 out_struct.total_N = size(data_sub_table, 1);
 
 
-sample_position_XY = [data_sub_table.([sample_src_col_stem, '_X']), data_sub_table.([sample_src_col_stem, '_X'])];
+sample_position_XY = [data_sub_table.([sample_src_col_stem, '_X']), data_sub_table.([sample_src_col_stem, '_Y'])];
 
 if ~strcmp(method_string, 'all')
 	cur_distance_sample_to_ref_object_array = nan(size(data_sub_table, 1), length(reference_object_position_stem_list));
@@ -30,7 +30,7 @@ for i_ref_object = 1 : length(reference_object_position_stem_list)
 	cur_ref_object_stem = reference_object_position_stem_list{i_ref_object};
 	cur_closeness_threshold = reference_object_position_stem_closeness_threshold_list(i_ref_object);
 	
-	cur_ref_object_XY =  [data_sub_table.([cur_ref_object_stem, '_X']), data_sub_table.([cur_ref_object_stem, '_X'])];
+	cur_ref_object_XY =  [data_sub_table.([cur_ref_object_stem, '_X']), data_sub_table.([cur_ref_object_stem, '_Y'])];
 	cur_distance_sample_to_ref_object = vecnorm(cur_ref_object_XY - sample_position_XY, 2, 2);
 
 	% find 
