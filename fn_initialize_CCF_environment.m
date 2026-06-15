@@ -29,8 +29,10 @@ disp(['Added ', start_dir, ' to the path, unless you save the path to disk this 
 
 % start planner
 %EntryPoint
-% open('./wave_clus3preprocess2TD_SCP01_v00.m');
-%open('./fn_UltraSort_preprocessing_TDT_SCP01_v02.m');
-open('./fn_parse_CCF_data.m');
-
+% Editor open() needs JVM; skip in -batch / -nojvm / headless runs
+if usejava('jvm') && ~batchStartupOptionUsed
+	% open('./wave_clus3preprocess2TD_SCP01_v00.m');
+	%open('./fn_UltraSort_preprocessing_TDT_SCP01_v02.m');
+	open('./fn_parse_CCF_data.m');
+end
 return
