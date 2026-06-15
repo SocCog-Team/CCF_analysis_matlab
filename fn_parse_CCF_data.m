@@ -85,7 +85,7 @@ redo_triallog_table = 0;
 redo_DI_samples = 0;
 redo_AI_samples = 0;
 
-fn_parse_CCF_version_string = 'v.003';	% this is fed into the hashes for the caches, so the easiest way to force a single shot redo of all sessions is to change that string.
+fn_parse_CCF_version_string = 'v.005';	% this is fed into the hashes for the caches, so the easiest way to force a single shot redo of all sessions is to change that string.
 
 
 create_timebase_conversion_between_CCF_and_EPHYS = 1; % 0: do nothing, 1: do once, >1 force
@@ -245,6 +245,7 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
 	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(1:5); % clear up to 7
 	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(6:end); % clear up to 7
+	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
 
 	only_process_gaze_calibration = 0;
 	if (only_process_gaze_calibration)
