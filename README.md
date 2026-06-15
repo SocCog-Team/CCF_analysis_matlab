@@ -6,6 +6,9 @@ This document is an internal reference for project-authored functions and how th
 
 ---
 
+## call matlab in cursor:
+.\run_matlab.ps1 -BatchCmd "run('CCF_gaze_analysis/fn_analyze_face_gaze_per_session')"
+
 ## Overview
 
 A CCF session directory (`.sessiondir`) contains raw experiment files:
