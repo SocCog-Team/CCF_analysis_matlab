@@ -12,7 +12,7 @@ for i_timestamp = 1 : length(timestamp_list)
 	abs_distance_list = abs(distance_list);
 	[~, cur_min_dist_idx] = min(abs_distance_list);
 	cur_closests_tick_idx_list(i_timestamp) = cur_min_dist_idx;
-	cur_closests_distance_list(i_timestamp) = distance_list(i_timestamp);
+	cur_closests_distance_list(i_timestamp) = distance_list(cur_min_dist_idx);
 end	
 
 % do not try to find nan timestamps...
