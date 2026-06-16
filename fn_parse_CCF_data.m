@@ -85,7 +85,7 @@ redo_triallog_table = 0;
 redo_DI_samples = 0;
 redo_AI_samples = 0;
 
-fn_parse_CCF_version_string = 'v.005';	% this is fed into the hashes for the caches, so the easiest way to force a single shot redo of all sessions is to change that string.
+fn_parse_CCF_version_string = 'v.006';	% this is fed into the hashes for the caches, so the easiest way to force a single shot redo of all sessions is to change that string.
 
 
 create_timebase_conversion_between_CCF_and_EPHYS = 1; % 0: do nothing, 1: do once, >1 force
@@ -156,6 +156,9 @@ if ~exist('GAZE_OPTS_struct', 'var') || isempty(GAZE_OPTS_struct)
 	%GAZE_OPTS_struct.PETH.fixation_type_set_list = {'last_pre_event_fix', 'first_post_event_fix', 'pre_S_sacc2targ_fix', 'post_S_sacc2targ_fix', 'pre_O_sacc2targ_fix', 'post_O_sacc2targ_fix'};
 
 end
+
+orig_GAZE_OPTS_struct = GAZE_OPTS_struct;
+
 
 
 if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_list)
@@ -244,8 +247,9 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 
 	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
 	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(1:5); % clear up to 7
-	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(6:end); % clear up to 7
-	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
+%	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(6:end); % clear up to 7
+	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
+	cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(6:end-2); % clear up to 7
 
 	only_process_gaze_calibration = 0;
 	if (only_process_gaze_calibration)
@@ -277,6 +281,20 @@ end
 
 for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	cur_CCF_runfolder_FQN = cur_CCF_runfolder_FQN_list{i_runfolder};
+
+	%start with clean slate
+	record_struct = [];
+	record2D_struct = [];
+	AI_samples_struct = [];
+	DI_samples_struct = [];
+	json_struct = [];
+	h5_struct = [];
+	txt_struct = [];
+	jsonl_struct = [];
+	enum_struct = [];
+	sorted_target_state_transition_table = [];
+	fixations_struct = [];
+
 	disp(['Processing: ', cur_CCF_runfolder_FQN]);
 
 	[~, proto_varname_session_id, tmp_ext] = fileparts(cur_CCF_runfolder_FQN);
@@ -298,6 +316,10 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	sessionID_dir_struct = dir(fullfile(cur_CCF_runfolder_FQN, '*.sessionID'));
 	jsonl_dir_struct = dir(fullfile(cur_CCF_runfolder_FQN, '*.jsonl'));
 
+
+	if numel(sessionID_dir_struct) ~= 1
+		error([mfilename, ': ERROR: expected exactly one .sessionID file, found ', num2str(numel(sessionID_dir_struct)), ' in ', cur_CCF_runfolder_FQN]);
+	end
 	session_id = extractBefore(sessionID_dir_struct.name, '.sessionID');
 	sessionID_struct = fn_parse_session_id(session_id);
 
@@ -376,6 +398,8 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 
 	% this comes from conf.py, and should autoadapt
+
+	GAZE_OPTS_struct = orig_GAZE_OPTS_struct;
 	if isfield(json_struct, 'conf_dot_json')
 		if isfield(GAZE_OPTS_struct, json_struct.conf_dot_json.setup_id)
 			GAZE_OPTS_struct = GAZE_OPTS_struct.(json_struct.conf_dot_json.setup_id);
@@ -399,8 +423,9 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		cur_jsonl_FQN = [jsonl_dir_struct(i_jsonl_FQN).folder, filesep, jsonl_dir_struct(i_jsonl_FQN).name];
 		[~, cur_jsonl_name] = fileparts(jsonl_dir_struct(i_jsonl_FQN).name);
 		% this will likely fail for complex or (too) large json files...
-		tmp_string_data = fileread(cur_jsonl_FQN);
-		if ~isempty(tmp_string_data)
+		%tmp_string_data = fileread(cur_jsonl_FQN);	% this is slow for large jsonl files like the pupil gaze one
+		cur_jsonl_info = dir(cur_jsonl_FQN);
+		if (cur_jsonl_info.bytes > 0)
 			cur_jsonl_mat_fqn = [cur_jsonl_FQN, '.mat'];
 			cur_jsonl_mat_fqn_dirstruct = dir(cur_jsonl_mat_fqn);
 			%use_cached_parsed_jsonl = 1;	% does not work right now
@@ -587,7 +612,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		if (debug)
 			disp(['Processing: ', cur_h5_name]);
 		end
-		cur_h5_FQN = [json_dir_struct(i_h5_FQN).folder, filesep, h5_dir_struct(i_h5_FQN).name];
+		cur_h5_FQN = [h5_dir_struct(i_h5_FQN).folder, filesep, h5_dir_struct(i_h5_FQN).name];
 		[~, cur_h5_name] = fileparts(h5_dir_struct(i_h5_FQN).name);
 
 		cur_file_info = dir(cur_h5_FQN);
@@ -670,7 +695,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		% TODO: cache this as mat file as processing is quite costly...
 
 
-		gaze_data_source_regexp_list = {'^A0_pupillabs_pupil_dot_[0|1]_dot_2d'};
+		gaze_data_source_regexp_list = {'^A0_pupillabs_pupil_dot_[01]_dot_2d'};
 		fn_add_gaze_data_to_record2D_request_list = {'synthesize_binocular_gaze_data'};
 
 
@@ -800,10 +825,10 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			% 1/120 second (~8ms) granularity, which is bad...
 			%[first2second_time_conversion_struct, second2first_time_conversion_struct, time_conversion_struct] = fn_create_timing_conversion_struct('CCF_timestamps', triallog_table.collection_start_s, 'CCF_ticks', triallog_table.collection_start_tick_idx);
 
-			if ismember({'src_run_idx'}, triallog_table.Properties.VariableNames) && isfield(json_struct, 'merge_manifest') && isfield(json_struct.merge_manifest, 'source_sessions') && isfield(json_struct.merge_manifest.source_sessions, 'session_id')
+			if ismember({'src_run_idx'}, triallog_table.Properties.VariableNames) && isfield(json_struct, 'merge_manifest_dot_json') && isfield(json_struct.merge_manifest_dot_json, 'source_sessions') && isfield(json_struct.merge_manifest_dot_json.source_sessions, 'session_id')
 				unassigned_src_run_idx = find(triallog_table.src_run_idx == 0);
 				triallog_table.src_run_idx(unassigned_src_run_idx) = triallog_table.src_run_idx(unassigned_src_run_idx - 1);	% since we have unassigned src_run_idx at the end of a run, just force these to refer to the correct session
-				merged_session_id_list = {json_struct.merge_manifest.source_sessions.session_id}';
+				merged_session_id_list = {json_struct.merge_manifest_dot_json.source_sessions.session_id}';
 				triallog_table.src_session_id = merged_session_id_list(triallog_table.src_run_idx);
 			end
 			% delete existing cache files to avoid these lingering around
@@ -822,11 +847,11 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	end
 
 	% add the reward information per collection
-	if ~isempty(jsonl_struct) && isfield(jsonl_struct, 'reward_trains')
+	if ~isempty(jsonl_struct) && isfield(jsonl_struct, 'reward_trains_dot_jsonl')
 		% attention collection number is increased just before reward is
 		% dispensed, so the reward collection number is offset by +1 for
 		% reason TASK, while offset by +0 for reason MANUAL
-		triallog_table = fn_add_reward_information_to_triallog(triallog_table, jsonl_struct.reward_trains);
+		triallog_table = fn_add_reward_information_to_triallog(triallog_table, jsonl_struct.reward_trains_dot_jsonl);
 	end
 
 
@@ -970,8 +995,14 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		end
 	end
 
+	if ~ismember({'PDD_onset_tick_idx'}, triallog_table.Properties.VariableNames)
+		triallog_table.PDD_onset_tick_idx = nan(size(triallog_table.collection_num));
+	end
+	if ~ismember({'PDD_offset_tick_idx'}, triallog_table.Properties.VariableNames)
+		triallog_table.PDD_offset_tick_idx = nan(size(triallog_table.collection_num));
+	end
 
-	if exist('sorted_target_state_transition_table', 'var')
+	if ~isempty(sorted_target_state_transition_table)
 		% add reach/gaze position data to the triallog_table
 		tmp_state_name_list = [enum_struct.target_state.name_list'; sorted_target_state_transition_table.new_state_ENUM_name];
 		[unique_target_state_name_list, ~, proto_unique_target_state_name_list_row_idx] = unique(tmp_state_name_list, 'stable');
@@ -982,7 +1013,9 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			tick_idx_list_list(i_target_states) = {cur_target_state_col_name};
 		end
 		tick_idx_list_list(1) = [];	% we started from entry 2 to skip NONE
-		tick_idx_list_list = [tick_idx_list_list; 'PDD_onset_tick_idx'];
+		if ismember('PDD_onset_tick_idx', triallog_table.Properties.VariableNames)
+			tick_idx_list_list = [tick_idx_list_list; 'PDD_onset_tick_idx'];
+		end
 		tick_idx_ext = '_tick_idx';
 
 		fixation_subtables_include_list = {'aims0', 'aims1', 'agent0', 'agent1'}; % 'aims0', 'aims1', 'agent0', 'agent1', 'A_binocular_eye', 'A_left_eye', 'A_right_eye', 'B_binocular_eye', 'B_left_eye', 'B_right_eye'
@@ -1131,7 +1164,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			end
 			cur_reward_magnitude_A_n_collections = sum(unique_reward_magnitudes_A_row_idx == i_unique_rewards_A);
 			cur_reward_magnitude_A_n_collections_ratio = cur_reward_magnitude_A_n_collections / total_collections;
-			disp(['A0: Reward magnitude ', num2str(cur_reward_magnitude_A), '; n_colllections: ', num2str(cur_reward_magnitude_A_n_collections), ' of ', num2str(total_collections), ': ', num2str(100*cur_reward_magnitude_A_n_collections_ratio, '%0.1f'), '%']);
+			disp(['A0: Reward magnitude ', num2str(cur_reward_magnitude_A), '; n_collections: ', num2str(cur_reward_magnitude_A_n_collections), ' of ', num2str(total_collections), ': ', num2str(100*cur_reward_magnitude_A_n_collections_ratio, '%0.1f'), '%']);
 		end
 		for i_unique_rewards_B = 1 : length(unique_reward_magnitudes_B)
 			cur_reward_magnitude_B = unique_reward_magnitudes_B(i_unique_rewards_B);
@@ -1142,7 +1175,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			end
 			cur_reward_magnitude_B_n_collections = sum(unique_reward_magnitudes_B_row_idx == i_unique_rewards_B);
 			cur_reward_magnitude_B_n_collections_ratio = cur_reward_magnitude_B_n_collections / total_collections;
-			disp(['B1: Reward magnitude ', num2str(cur_reward_magnitude_B), '; n_colllections: ', num2str(cur_reward_magnitude_B_n_collections), ' of ', num2str(total_collections), ': ', num2str(100*cur_reward_magnitude_B_n_collections_ratio, '%0.1f'), '%']);
+			disp(['B1: Reward magnitude ', num2str(cur_reward_magnitude_B), '; n_collections: ', num2str(cur_reward_magnitude_B_n_collections), ' of ', num2str(total_collections), ': ', num2str(100*cur_reward_magnitude_B_n_collections_ratio, '%0.1f'), '%']);
 		end
 	end
 
@@ -1197,7 +1230,7 @@ if ~isempty(figure_handle)
 	if ismember(exist('write_out_figure'), [2,4])
 		write_out_figure(figure_handle, fullfile(data_path, name_string));
 	else
-		exportgraphics(figure_handle, fullfile(cur_path, fullfile(data_path, name_string)), 'BackgroundColor', 'none', 'ContentType', 'vector');
+		exportgraphics(figure_handle, fullfile(data_path, name_string), 'BackgroundColor', 'none', 'ContentType', 'vector');
 	end
 	close(figure_handle);
 end
