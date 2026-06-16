@@ -52,24 +52,24 @@ plotting_options_struct.format_string_list = {'.png', '.fig'};
 
 if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_list)
 	cur_CCF_runfolder_FQN_list = { ...
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251219', '20251219TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% re-run with correct scaling
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260204', '20260204TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% correct scaling
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260206', '20260206TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% correct scaling
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260306', '20260306TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260312', '20260312TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', '20260319TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% first session with monkey gaze data...
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260320', '20260320TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% session with gaze data, but with broken calibration data, take calibration from 260319
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260325', '20260325TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260326', '20260326TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260402', '20260402TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260403', '20260403TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260409', '20260409TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 12
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260423', '20260423TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 13
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260424', '20260424TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 14
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260428', '20260428TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 14
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260429', '20260429TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 14
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260430', '20260430TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 14
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260501', '20260501TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 14
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251219', '20251219TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  1: re-run with correct scaling
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260204', '20260204TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  2: correct scaling
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260206', '20260206TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  3: correct scaling
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260306', '20260306TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  4:
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260312', '20260312TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  5:
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', '20260319TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  6: first session with monkey gaze data...
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260320', '20260320TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  7: session with gaze data, but with broken calibration data, take calibration from 260319
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260325', '20260325TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  8:
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260326', '20260326TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  9:
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260402', '20260402TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 10:
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260403', '20260403TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 11:
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260409', '20260409TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 12:
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260423', '20260423TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 13:
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260424', '20260424TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 14:
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260428', '20260428TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 15:
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260429', '20260429TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 16:
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260430', '20260430TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 17:
+		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260501', '20260501TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 18:
 		};
 
 	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
@@ -79,6 +79,7 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 
 	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(6:7); % clear up to 7
 	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end-1:end); % clear up to 7
+	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list([6 7 8 9 10 11 12 13 14 17 18]); % clear up to 7
 
 
 	only_process_gaze_calibration = 0;
@@ -111,7 +112,10 @@ end
 max_cycle_duration_s = 10;	% exclude cycles longer than this
 mean_dX_CCF_threshold = 0.05;	%(values smaller near fixation, values larger far fixations)
 % sample based
-min_gaze_confidence = 0.85;%
+min_gaze_confidence = 0.85;	% for binocular dominated by the eye with lower signal
+valid_X_range = [-0.1, 1.1];	% add some margin around the playing field for valid samples
+valid_Y_range = [-0.1, 1.1];	% add some margin around the playing field for valid samples
+
 gaze_src_col_name_stem = 'A_binocular_eye';
 
 additional_state_name_list = {'Acquisition'};	% these do not map fully onto target states
@@ -278,6 +282,13 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	face_ROI.center_XY_pixel = [ROI_center_X_list_pixel', ROI_center_Y_list_pixel'];
 	face_ROI.center_XY = [ROI_center_X_list', ROI_center_Y_list'];
 
+	% to estimate the expected fixations on the face by chance we want to
+	% fraction of the face ROI arae to the toalf included playing field
+	% area
+	face_ROI.radius = 1/7;	% radius of the face ROI in relative CCF units
+	face_ROI.area = (face_ROI.radius)^2 * pi;
+	face_ROI.included_playing_field_area = diff(valid_X_range) * diff(valid_Y_range);
+	face_ROI.face_ratio_of_included_playing_field_PCT = 100 * face_ROI.area / face_ROI.included_playing_field_area;
 
 	xsession.face_ROI = face_ROI;	% this is alwys the same but to keep thjings simple just re-assign on each iteration
 
@@ -405,6 +416,12 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	%min_gaze_confidence = 0.85;%
 	%gaze_src_col_name_stem = 'A_binocular_eye';
 	valid_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_confidence']) >= min_gaze_confidence;
+
+	% 20260615 agred with igor, we only want to count samples on the paying
+	% field and 10% around it
+	valid_gaze_sample_ldx = valid_gaze_sample_ldx & record2D_table.([gaze_src_col_name_stem, '_X']) >= valid_X_range(1) & record2D_table.([gaze_src_col_name_stem, '_X']) <= valid_X_range(2);
+	valid_gaze_sample_ldx = valid_gaze_sample_ldx & record2D_table.([gaze_src_col_name_stem, '_Y']) >= valid_Y_range(1) & record2D_table.([gaze_src_col_name_stem, '_Y']) <= valid_Y_range(2);
+
 	near_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_dX']) <= mean_dX_CCF_threshold;
 	far_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_dX']) > mean_dX_CCF_threshold;
 
@@ -468,11 +485,17 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 
 	reference_object_position_stem_list = [aim_prefix_list, agent_prefix_list, target_prefix_list, 'B_facecenter'];	% for gaze_to_object_mapping_rule all this is fine, but for closest_object_within_threshold this is less fine
-	reference_object_position_stem_closeness_threshold_list = [zeros(size(aim_prefix_list)) + 0.1, zeros(size(agent_prefix_list)) + conf_struct.agent_radius*2, zeros(size(target_prefix_list)) + conf_struct.target_radius*2, 1/7];
+	reference_object_position_stem_closeness_threshold_list = [zeros(size(aim_prefix_list)) + 0.05, zeros(size(agent_prefix_list)) + conf_struct.agent_radius*1.5, zeros(size(target_prefix_list)) + conf_struct.target_radius*1.5, face_ROI.radius];
 
 	
 	reference_object_position_stem_list = [target_prefix_list, 'B_facecenter'];	% use for closest_object_within_threshold
-	reference_object_position_stem_closeness_threshold_list = [zeros(size(target_prefix_list)) + conf_struct.target_radius*2, 1/7];
+	reference_object_position_stem_closeness_threshold_list = [zeros(size(target_prefix_list)) + conf_struct.target_radius*1.5, face_ROI.radius];
+
+	% 20260515 agrred with Igor:
+	reference_object_position_stem_list = [aim_prefix_list, target_prefix_list, 'B_facecenter'];	% use for closest_object_within_threshold
+	reference_object_position_stem_closeness_threshold_list = [zeros(size(aim_prefix_list)) + 0.05, zeros(size(target_prefix_list)) + conf_struct.target_radius*1.5, face_ROI.radius];
+	
+	
 	% we want/need to test for each sample whether it is close
 	% enough to any object to be cpunted as on that object
 	% for now do not assign things exclusively (by picking the closest if multiple objects qualify)
@@ -489,9 +512,9 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	timestamps.(mfilename).per_cycle_proportion_count_loop.start = tic;
 	all_false_tick_ldx = false([size(record2D_table, 1), 1]);
 
-	version_string = 'v.005';
+	version_string = 'v.007';
 	target_state_exclusion_list = {'col_targ_initiate_reward'};% skip these states, col_targ_initiate_reward should only last 1 cycle...
-	gaze_to_object_mapping_rule = 'closest_object_within_threshold';	% all: each gaze sample is counted for all below threshold distance objects ; closest_within_threshold: pick the closest object fullfilling the threshold condition
+	gaze_to_object_mapping_rule = 'all';	% all: each gaze sample is counted for all below threshold distance objects ; closest_within_threshold: pick the closest object fullfilling the threshold condition
 
 
 	GazePropCount_subhash_list = { ...
@@ -577,7 +600,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 				cur_gaze_samples_on_object_struct.vergence = cur_vergence_subset_string;
 				% add some aggregate columns: aims_total, agents_total,
 				% target_total, selected_target, nonselected_targets
-
+				cur_gaze_samples_on_object_struct = fn_add_selected_target_gaze_columns_CCF( cur_gaze_samples_on_object_struct, triallog_table(i_cycle, :), gaze_src_col_name_stem, target_prefix_list);
 
 				if isempty(gaze_on_object_prop_count_struct)
 					gaze_on_object_prop_count_struct = cur_gaze_samples_on_object_struct;
@@ -592,6 +615,8 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 				cur_gaze_samples_on_object_struct.sessionID = cur_sessionID;
 				cur_gaze_samples_on_object_struct.epoch = fn_shorten_object_name_list(cur_epoch_name, [], []);
 				cur_gaze_samples_on_object_struct.vergence = cur_vergence_subset_string;
+				cur_gaze_samples_on_object_struct = fn_add_selected_target_gaze_columns_CCF( cur_gaze_samples_on_object_struct, triallog_table(i_cycle, :), gaze_src_col_name_stem, target_prefix_list);
+
 				if isempty(gaze_on_object_prop_count_struct)
 					gaze_on_object_prop_count_struct = cur_gaze_samples_on_object_struct;
 				else
@@ -604,6 +629,8 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 				cur_gaze_samples_on_object_struct.sessionID = cur_sessionID;
 				cur_gaze_samples_on_object_struct.epoch = fn_shorten_object_name_list(cur_epoch_name, [], []);
 				cur_gaze_samples_on_object_struct.vergence = cur_vergence_subset_string;
+				cur_gaze_samples_on_object_struct = fn_add_selected_target_gaze_columns_CCF( cur_gaze_samples_on_object_struct, triallog_table(i_cycle, :), gaze_src_col_name_stem, target_prefix_list);
+
 				if isempty(gaze_on_object_prop_count_struct)
 					gaze_on_object_prop_count_struct = cur_gaze_samples_on_object_struct;
 				else
@@ -679,6 +706,12 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		%min_gaze_confidence = 0.85;%
 		%gaze_src_col_name_stem = 'A_binocular_eye';
 		valid_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_confidence']) >= min_gaze_confidence;
+	
+		% 20260615 agred with igor, we only want to count samples on the paying
+		% field and 10% around it
+		valid_gaze_sample_ldx = valid_gaze_sample_ldx & record2D_table.([gaze_src_col_name_stem, '_X']) >= valid_X_range(1) & record2D_table.([gaze_src_col_name_stem, '_X']) <= valid_X_range(2);
+		valid_gaze_sample_ldx = valid_gaze_sample_ldx & record2D_table.([gaze_src_col_name_stem, '_Y']) >= valid_Y_range(1) & record2D_table.([gaze_src_col_name_stem, '_Y']) <= valid_Y_range(2);
+
 		near_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_dX']) <= mean_dX_CCF_threshold;
 		far_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_dX']) > mean_dX_CCF_threshold;
 
@@ -892,6 +925,12 @@ if (plot_2d_and_object_proportions_xsession)
 	%min_gaze_confidence = 0.85;%
 	%gaze_src_col_name_stem = 'A_binocular_eye';
 	valid_gaze_sample_ldx = xsession.record2D_table.([gaze_src_col_name_stem, '_confidence']) >= min_gaze_confidence;
+	% 20260615 agred with igor, we only want to count samples on the paying
+	% field and 10% around it
+	valid_gaze_sample_ldx = valid_gaze_sample_ldx & xsession.record2D_table.([gaze_src_col_name_stem, '_X']) >= valid_X_range(1) & xsession.record2D_table.([gaze_src_col_name_stem, '_X']) <= valid_X_range(2);
+	valid_gaze_sample_ldx = valid_gaze_sample_ldx & xsession.record2D_table.([gaze_src_col_name_stem, '_Y']) >= valid_Y_range(1) & xsession.record2D_table.([gaze_src_col_name_stem, '_Y']) <= valid_Y_range(2);
+
+
 	near_gaze_sample_ldx = xsession.record2D_table.([gaze_src_col_name_stem, '_dX']) <= mean_dX_CCF_threshold;
 	far_gaze_sample_ldx = xsession.record2D_table.([gaze_src_col_name_stem, '_dX']) > mean_dX_CCF_threshold;
 
@@ -926,8 +965,8 @@ if (plot_2d_and_object_proportions_xsession)
 	all_epoch_name_list = [target_state_name_list, additional_state_name_list];
 	short_all_epoch_name_list = fn_shorten_object_name_list(all_epoch_name_list);
 
-
-
+	% TODO remove cycles where the confederate collected the competitive
+	% target from the set
 
 	%plot_set_ldx_list = {dyadic_cycle_ldx, solo_cycle_ldx};
 	plot_set_include_regexplist_list = {'dyadic', 'solo'};
@@ -974,7 +1013,7 @@ if (plot_2d_and_object_proportions_xsession)
 	panel_request_list = {'gaze2D_per_epoch', 'gaze_on_object_proportion'};
 	% n_panels = length(panel_request_list);
 
-	target_ignore_list = {'coop_A', 'coop_B', 'comp', 'pun', 'Solo_A', 'Solo_B', 'target0', 'target1', 'target2', 'target3', 'target4', 'target5', 'target6', 'target7', 'target8', 'target9'};
+	target_ignore_list = {'coop_A', 'coop_B', 'comp', 'pun', 'Solo_A', 'Solo_B', 'target0', 'target1', 'target2', 'target3', 'target4', 'target5', 'target6', 'target7', 'target8', 'target9', 'Targets'};
 	aggregation_type_string = 'across_sessions';
 	cur_plot_fh_list = fn_plot_by_plot_col_row_panel_sets( ...
 		xsession.triallog_table, valid_cycle_ldx, triallog_cycle_key_list, xsession.record2D_table, valid_gaze_sample_ldx, xsession.per_state_valid_tick_sessionID_cycle_per_cycle_idx_cellarray, ...

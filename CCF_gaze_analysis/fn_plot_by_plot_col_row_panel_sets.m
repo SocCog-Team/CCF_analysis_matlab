@@ -117,10 +117,15 @@ for i_plot = 1 : length(plot_unique_keys)
 					fixation_color = coolbar(end, :);
 			end
 
-			cur_panel_gaze_sample_ldx = cur_col_ticks_in_cycles_and_epochs_ldx & cur_vergence_gaze_sample_ldx;
 
+			cur_panel_gaze_sample_ldx = cur_col_ticks_in_cycles_and_epochs_ldx & cur_vergence_gaze_sample_ldx;
 			% only plot valid samples
 			cur_panel_gaze_sample_ldx = cur_panel_gaze_sample_ldx & valid_gaze_sample_ldx;
+
+			% get an idea of the fraction of samples
+			cur_set_valid_samples_N = sum(cur_col_ticks_in_cycles_and_epochs_ldx & valid_gaze_sample_ldx);
+			cur_set_valid_vergence_samples_N = sum(cur_panel_gaze_sample_ldx);
+			cur_set_PCT_of_valid = 100 * cur_set_valid_vergence_samples_N / cur_set_valid_samples_N;
 
 			for i_panel = 1 : n_panels
 				cur_panel_row = ((cur_row - 1) * n_panels) + i_panel;
@@ -136,15 +141,15 @@ for i_plot = 1 : length(plot_unique_keys)
 
 				switch cur_panel_type
 					case 'gaze2D_per_epoch'
-						fixation_alpha = 0.025;
-						face_ROI_radius = 1/7;
+						fixation_alpha = 0.0025;
+						face_ROI_radius = face_ROI.radius;
 
 						hold on
 						plot([0 1 1 0 0], [0 0 1 1 0], 'Color', [0 0 0], 'LineWidth', 1, 'DisplayName', 'Playing field');
 
 
 						unique_B_face_center_list = unique([record2D_table.B_facecenter_X(cur_col_ticks_in_cycles_and_epochs_ldx), record2D_table.B_facecenter_Y(cur_col_ticks_in_cycles_and_epochs_ldx)], 'row');
-
+						cur_cur_row_name = cur_row_name;
 						for i_unique_B_face_center = 1 : size(unique_B_face_center_list, 1)
 							cur_face_ROI_center_XY = unique_B_face_center_list(i_unique_B_face_center, :);
 
@@ -169,7 +174,14 @@ for i_plot = 1 : length(plot_unique_keys)
 						end
 
 						color_by_face_center = 1;
-						if (color_by_face_center) && size(unique_B_face_center_list, 1) > 1 && strcmp('per_session', aggregation_type_string)
+						cur_x_data = nan(size(record2D_table.([gaze_src_col_name_stem, '_X'])));
+						cur_y_data = nan(size(record2D_table.([gaze_src_col_name_stem, '_X'])));
+						cur_group_data = nan(size(record2D_table.([gaze_src_col_name_stem, '_X'])));
+						cur_by_group_color = nan([size(record2D_table.([gaze_src_col_name_stem, '_X']), 1), 3]);
+
+						collected_samples = 0;
+
+						if (color_by_face_center) && size(unique_B_face_center_list, 1) > 1 %&& strcmp('per_session', aggregation_type_string)
 							for i_unique_B_face_center = 1 : size(unique_B_face_center_list, 1)
 								cur_face_ROI_center_XY = unique_B_face_center_list(i_unique_B_face_center, :);
 								cur_face_ROI_idx = find(ismember(face_ROI.center_XY, cur_face_ROI_center_XY, 'rows'));
@@ -177,14 +189,38 @@ for i_plot = 1 : length(plot_unique_keys)
 								cur_record2D_table_face_center_XY = [record2D_table.B_facecenter_X, record2D_table.B_facecenter_Y];
 								cur_face_ROI_tick_ldx = ismember(cur_record2D_table_face_center_XY, cur_face_ROI_center_XY, 'rows');
 								cur_color = face_ROI.colors{cur_face_ROI_idx};
+								cur_cur_row_name = face_ROI.names{cur_face_ROI_idx};
 
+								intermix_scatter_groups = 0;
 								if sum(cur_panel_gaze_sample_ldx & cur_face_ROI_tick_ldx) > 0
-									cur_gaze2D_sh = scatter(cur_ah, record2D_table.([gaze_src_col_name_stem, '_X'])(cur_panel_gaze_sample_ldx & cur_face_ROI_tick_ldx),  record2D_table.([gaze_src_col_name_stem, '_Y'])(cur_panel_gaze_sample_ldx & cur_face_ROI_tick_ldx), 'filled', 'DisplayName', cur_row_name, 'SizeData', 3, 'MarkerEdgeColor', cur_color, 'MarkerFaceColor', cur_color, 'MarkerFaceAlpha', fixation_alpha, 'MarkerEdgeAlpha', fixation_alpha);
+									if ~intermix_scatter_groups
+										cur_gaze2D_sh = scatter(cur_ah, record2D_table.([gaze_src_col_name_stem, '_X'])(cur_panel_gaze_sample_ldx & cur_face_ROI_tick_ldx),  record2D_table.([gaze_src_col_name_stem, '_Y'])(cur_panel_gaze_sample_ldx & cur_face_ROI_tick_ldx), 'filled', 'DisplayName', cur_cur_row_name, 'SizeData', 3, 'MarkerEdgeColor', cur_color, 'MarkerFaceColor', cur_color, 'MarkerFaceAlpha', fixation_alpha, 'MarkerEdgeAlpha', fixation_alpha);
+									else
+										cur_start_offset = (i_unique_B_face_center - 1) * size(unique_B_face_center_list, 1) + 1;
+										cur_x_data(cur_start_offset:cur_start_offset + sum(cur_panel_gaze_sample_ldx & cur_face_ROI_tick_ldx) - 1) = record2D_table.([gaze_src_col_name_stem, '_X'])(cur_panel_gaze_sample_ldx & cur_face_ROI_tick_ldx);
+										cur_y_data(cur_start_offset:cur_start_offset + sum(cur_panel_gaze_sample_ldx & cur_face_ROI_tick_ldx) - 1) = record2D_table.([gaze_src_col_name_stem, '_Y'])(cur_panel_gaze_sample_ldx & cur_face_ROI_tick_ldx);
+										cur_group_data(cur_start_offset:cur_start_offset + sum(cur_panel_gaze_sample_ldx & cur_face_ROI_tick_ldx) - 1) = i_unique_B_face_center;
+										collected_samples = collected_samples + sum(cur_panel_gaze_sample_ldx & cur_face_ROI_tick_ldx);
+										cur_by_group_color(cur_start_offset:cur_start_offset + sum(cur_panel_gaze_sample_ldx & cur_face_ROI_tick_ldx) - 1, :) = repmat(cur_color, sum(cur_panel_gaze_sample_ldx & cur_face_ROI_tick_ldx), 1);
+									end
 								end
+							end
+							if (intermix_scatter_groups)
+								% since wemight not include all samples,
+								% prune the data array...
+								if collected_samples < numel(cur_x_data)
+									cur_x_data(collected_samples+1:end) = [];
+									cur_y_data(collected_samples+1:end) = [];
+									cur_group_data(collected_samples+1:end) = [];
+									cur_by_group_color(collected_samples+1:end, :) = [];
+								end
+								% now shuffle, these 
+								shuffled_idx = randperm(numel(cur_x_data))';								
+								cur_gaze2D_sh = scatter(cur_ah, cur_x_data(shuffled_idx),  cur_y_data(shuffled_idx), 'filled', 'DisplayName', cur_cur_row_name, 'SizeData', 3, 'CData', cur_by_group_color(shuffled_idx, :), 'MarkerFaceAlpha', fixation_alpha, 'MarkerEdgeAlpha', fixation_alpha);
 							end
 						else
 							if sum(cur_panel_gaze_sample_ldx) > 0
-								cur_gaze2D_sh = scatter(cur_ah, record2D_table.([gaze_src_col_name_stem, '_X'])(cur_panel_gaze_sample_ldx),  record2D_table.([gaze_src_col_name_stem, '_Y'])(cur_panel_gaze_sample_ldx), 'filled', 'DisplayName', cur_row_name, 'SizeData', 3, 'MarkerEdgeColor', fixation_color, 'MarkerFaceColor', fixation_color, 'MarkerFaceAlpha', fixation_alpha, 'MarkerEdgeAlpha', fixation_alpha);
+								cur_gaze2D_sh = scatter(cur_ah, record2D_table.([gaze_src_col_name_stem, '_X'])(cur_panel_gaze_sample_ldx),  record2D_table.([gaze_src_col_name_stem, '_Y'])(cur_panel_gaze_sample_ldx), 'filled', 'DisplayName', cur_cur_row_name, 'SizeData', 3, 'MarkerEdgeColor', fixation_color, 'MarkerFaceColor', fixation_color, 'MarkerFaceAlpha', fixation_alpha, 'MarkerEdgeAlpha', fixation_alpha);
 							end
 						end
 
@@ -195,7 +231,7 @@ for i_plot = 1 : length(plot_unique_keys)
 						ylabel(cur_ah, 'Elevation [relative]', 'Interpreter', 'none', 'FontSize', plotting_options_struct.labelfontsize)
 						title(cur_ah, [cur_col_name], 'Interpreter', 'none', 'FontSize', plotting_options_struct.titlefontsize);
 						%subtitle(cur_ah, [cur_plot_set], 'Interpreter', 'none', 'FontSize', plotting_options_struct.subtitlefontsize);
-						subtitle(cur_ah, regexprep(cur_row_name, 'Fixations', ' Fixations'), 'Interpreter', 'none', 'FontSize', plotting_options_struct.subtitlefontsize);
+						subtitle(cur_ah, [regexprep(cur_row_name, 'Fixations', ' Fixations'), ' (', num2str(round(cur_set_PCT_of_valid)), '%)'], 'Interpreter', 'none', 'FontSize', plotting_options_struct.subtitlefontsize);
 						%subtitle(cur_ah, ['Partner position: ', cur_face_ROI_name, ' ', cur_set_name, ' trials around ', cur_col_name], 'Interpreter', 'none');
 						%legend('Location','southeast');
 
@@ -213,8 +249,8 @@ for i_plot = 1 : length(plot_unique_keys)
 						gaze_on_object_proportion.MarkerFaceAlpha = 0.5;
 						gaze_on_object_proportion.MarkerEdgeAlpha = 0.5;
 						gaze_on_object_proportion.data_col_name_list = {...
-							...'A_binocular_eye_on_aims0_PCT',...
-							...'A_binocular_eye_on_aims1_PCT', ...
+							'A_binocular_eye_on_aims0_PCT',...
+							'A_binocular_eye_on_aims1_PCT', ...
 							...'A_binocular_eye_on_agent0_PCT',...
 							...'A_binocular_eye_on_agent1_PCT', ...
 							'A_binocular_eye_on_target0_PCT', ...
@@ -223,6 +259,8 @@ for i_plot = 1 : length(plot_unique_keys)
 							'A_binocular_eye_on_target3_PCT', ...
 							'A_binocular_eye_on_target4_PCT', ...
 							'A_binocular_eye_on_B_facecenter_PCT', ...
+							'A_binocular_eye_on_selected_target_PCT', ...
+							'A_binocular_eye_on_other_targets_PCT', ...
 							};
 
 						% find all relevant rows in gaze_on_object_prop_count_table
@@ -247,6 +285,10 @@ for i_plot = 1 : length(plot_unique_keys)
 							cur_xvec_array(:, i_data_col) = cur_X_vec;
 							cur_name_vec{i_data_col} = regexprep(regexprep(data_col_name, 'A_binocular_eye_on_', ''), '_PCT', '');
 							cur_name_vec{i_data_col} = regexprep(cur_name_vec{i_data_col}, 'B_facecenter', 'face');
+							cur_name_vec{i_data_col} = regexprep(cur_name_vec{i_data_col}, 'selected_target', 'selTarg');
+							cur_name_vec{i_data_col} = regexprep(cur_name_vec{i_data_col}, 'other_targets', 'otherTarg');
+							cur_name_vec{i_data_col} = regexprep(cur_name_vec{i_data_col}, 'aims0', 'ownHand');
+							cur_name_vec{i_data_col} = regexprep(cur_name_vec{i_data_col}, 'aims1', 'otherHand');
 							% get the proper target type
 							if (contains(cur_name_vec(i_data_col), regexpPattern('target[0-9]'))) && ~isempty(cur_data)
 
@@ -297,10 +339,12 @@ for i_plot = 1 : length(plot_unique_keys)
 							% columns
 							ignore_target_col_ldx = false(size(cur_name_vec));
 
-							if (only_include_all_target_fix_pct) && ~isempty(target_ignore_list)
-								ignore_target_col_ldx = ismember(cur_name_vec, target_ignore_list);
-							end
 						end
+
+						if (only_include_all_target_fix_pct) && ~isempty(target_ignore_list)
+							ignore_target_col_ldx = ismember(cur_name_vec, target_ignore_list);
+						end
+
 
 						include_col_ldx = ~ignore_target_col_ldx;
 
@@ -315,7 +359,26 @@ for i_plot = 1 : length(plot_unique_keys)
 
 						% now do some statistics across the
 						% selected columns?
+						% compare the distribution of face fixations in precent to
+						% face_ROI.face_ratio_of_included_playing_field_PCT
 
+						show_face_gaze_sig = 1;
+						if (show_face_gaze_sig)
+							face_col_idx = find(ismember(cur_name_vec, {'face'}));
+							% we can not use signrank, as our data is not
+							% symmetric around its mean, so the signtest will
+							% need to do
+							[face_area_PCT.p, face_area_PCT.h, face_area_PCT.stats] = signtest(cur_xvec_array(:, face_col_idx), face_ROI.face_ratio_of_included_playing_field_PCT);
+							% now we need to report this
+							if face_area_PCT.p < 0.05
+								cur_face_aggregate_data = median(cur_data_array(:, face_col_idx), 'omitnan');
+								if cur_face_aggregate_data < face_ROI.face_ratio_of_included_playing_field_PCT
+									cur_name_vec{face_col_idx} = [cur_name_vec{face_col_idx}, ' (sig. <)'];
+								elseif cur_face_aggregate_data > face_ROI.face_ratio_of_included_playing_field_PCT
+									cur_name_vec{face_col_idx} = [cur_name_vec{face_col_idx}, ' (sig. >)'];
+								end
+							end
+						end
 
 
 						hold on
@@ -330,15 +393,24 @@ for i_plot = 1 : length(plot_unique_keys)
 							%title(cur_ah, [cur_col_name], 'Interpreter', 'none', 'FontSize', plotting_options_struct.titlefontsize);
 							%subtitle(cur_ah, '', 'Interpreter', 'none', 'FontSize', plotting_options_struct.subitlefontsize);
 						
-							show_pairwise_significance = 1;
-							[ pair_id_array, test_stat_structarr, report_string_list, pair_id_list ] = fn_get_pairwise_stats( 'ranksum_approximate', cur_data_array, cur_xvec_array(1, :), cur_name_vec);
-							lower_Y_limit = 0;
-							if ~isempty(pair_id_array) && (show_pairwise_significance)
-								cur_sigh = sigstar(pair_id_list, [test_stat_structarr.p], 1);
-								delete(cur_sigh([test_stat_structarr.p] > 0.05));	% delete empty lines delete(cur_sigh([test_stat_structarr.p] <= 0.05));
-								set(cur_sigh([test_stat_structarr.p] <= 0.05), 'LineWidth', plotting_options_struct.set_gca.linewidth);
-								set(cur_ah, 'YLim', [lower_Y_limit (100 + (size(pair_id_array, 1) * 12))]); % scale the upper limit to allow space for the significance bars...
+							set(cur_ah, 'YLim', [-5, 105]);
+							yticks(cur_ah,  [0, 50, 100]);
+
+							show_pairwise_significance = 0;
+							if  (show_pairwise_significance)
+								[ pair_id_array, test_stat_structarr, report_string_list, pair_id_list ] = fn_get_pairwise_stats( 'ranksum_approximate', cur_data_array, cur_xvec_array(1, :), cur_name_vec);
+								lower_Y_limit = 0;
+								if ~isempty(pair_id_array) && (show_pairwise_significance)
+									cur_sigh = sigstar(pair_id_list, [test_stat_structarr.p], 1);
+									delete(cur_sigh([test_stat_structarr.p] > 0.05));	% delete empty lines delete(cur_sigh([test_stat_structarr.p] <= 0.05));
+									set(cur_sigh([test_stat_structarr.p] <= 0.05), 'LineWidth', plotting_options_struct.set_gca.linewidth);
+									set(cur_ah, 'YLim', [lower_Y_limit (100 + (size(pair_id_array, 1) * 12))]); % scale the upper limit to allow space for the significance bars...
+								end
 							end
+							if (show_face_gaze_sig)
+								yline(cur_ah, face_ROI.face_ratio_of_included_playing_field_PCT, 'Color', [0.3 0.3 0.3], 'DisplayName', 'Expected fixation PCT on face');
+							end
+
 						end
 
 					otherwise
