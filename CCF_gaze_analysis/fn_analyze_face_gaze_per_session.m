@@ -47,7 +47,7 @@ out_dir = fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', 'CCF', 'GAZE_
 plotting_options_struct = fn_BoS_ephys_default_plotting_options;
 % overrides
 plotting_options_struct.format_string_list = {'.png', '.fig'};
-
+close_plots_automatically = 1;
 
 
 if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_list)
@@ -319,9 +319,11 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 		case '20260428TNNNNNNM.A_Elmo.B_MIXED.SCP_01'
 			per_run_face_ROI_idx = repmat(find(ismember(face_ROI.names, {'face_right'})), n_src_runs, 1);
+			per_run_face_ROI_idx(end) = 1;			
 
 		case '20260429TNNNNNNM.A_Elmo.B_MIXED.SCP_01'
 			per_run_face_ROI_idx = repmat(find(ismember(face_ROI.names, {'face_right'})), n_src_runs, 1);
+			per_run_face_ROI_idx(end) = 1;
 
 		case '20260430TNNNNNNM.A_Elmo.B_MIXED.SCP_01'
 			per_run_face_ROI_idx = [find(ismember(face_ROI.names, {'face_right'})); find(ismember(face_ROI.names, {'facecenter'})); find(ismember(face_ROI.names, {'facecenter'}))];
@@ -775,7 +777,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		target_ignore_list = {'coop_A', 'coop_B', 'comp', 'pun', 'Solo_A', 'Solo_B', 'target0', 'target1', 'target2', 'target3', 'target4', 'target5', 'target6', 'target7', 'target8', 'target9'};
 		aggregation_type_string = 'per_session';
 
-		cur_plot_fh_list = fn_plot_by_plot_col_row_panel_sets( ...
+		[cur_plot_fh_list, per_session_panel_index_struct_arr] = fn_plot_by_plot_col_row_panel_sets( ...
 			triallog_table, valid_cycle_ldx, triallog_cycle_key_list, record2D_table, valid_gaze_sample_ldx, per_state_valid_tick_sessionID_cycle_per_cycle_idx_cellarray, ...
 			gaze_on_object_prop_count_table, goopc_table_cycle_key_list, near_gaze_sample_ldx, far_gaze_sample_ldx, ...
 			target_ignore_list, face_ROI, ...
@@ -784,6 +786,20 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			col_unique_keys, sorted_col_set_list, col_data_row_key_idx_arr, ...
 			row_unique_keys, sorted_row_set_list, row_data_row_key_idx_arr, ...
 			aggregation_type_string, out_dir, plotting_options_struct );
+
+
+		[per_session_dyadic_solo_stats_table, per_session_dyadic_solo_meta] = ...
+			fn_fit_dyadic_vs_solo_gaze_glme(per_session_panel_index_struct_arr, gaze_on_object_prop_count_table, 0.05, 1, 1);
+		if ~isempty(per_session_dyadic_solo_stats_table)
+			stats_out_dir = fullfile(out_dir, aggregation_type_string);
+			if ~isfolder(stats_out_dir), mkdir(stats_out_dir); end
+			save(fullfile(stats_out_dir, 'dyadic_vs_solo_stats_glmm.mat'), 'per_session_dyadic_solo_stats_table', 'per_session_dyadic_solo_meta');
+			writetable(per_session_dyadic_solo_stats_table, fullfile(stats_out_dir, 'dyadic_vs_solo_stats_glmm.csv'));
+			fn_plot_dyadic_solo_paired_objects(per_session_panel_index_struct_arr, gaze_on_object_prop_count_table, per_session_dyadic_solo_stats_table, aggregation_type_string, out_dir, plotting_options_struct, sorted_col_set_list, sorted_row_set_list, target_ignore_list);
+		end
+		if (close_plots_automatically)
+			close all;
+		end
 	end
 
 
@@ -894,6 +910,9 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 				disp(['Saving figure as: ', cur_out_FQN]);
 				write_out_figure(cur_fh, cur_out_FQN);
 
+				if (close_plots_automatically)
+					close all;
+				end
 			end
 		end
 	end
@@ -993,7 +1012,7 @@ if (plot_2d_and_object_proportions_xsession)
 
 
 
-	% figure out which columns
+	% figure out which columns7
 	cur_key_col_list = {'epoch'};
 	[ col_key_list, col_existing_keyfields_ldx, col_unique_keys, col_data_row_key_idx_arr, col_unique_keys_count_list ] = fn_generate_key_from_selected_table_columns_CCF(cur_key_col_list, xsession.gaze_on_object_prop_count_table, '_');
 	% n_cols = length(col_unique_keys);
@@ -1015,7 +1034,7 @@ if (plot_2d_and_object_proportions_xsession)
 
 	target_ignore_list = {'coop_A', 'coop_B', 'comp', 'pun', 'Solo_A', 'Solo_B', 'target0', 'target1', 'target2', 'target3', 'target4', 'target5', 'target6', 'target7', 'target8', 'target9', 'Targets'};
 	aggregation_type_string = 'across_sessions';
-	cur_plot_fh_list = fn_plot_by_plot_col_row_panel_sets( ...
+	[cur_plot_fh_list, xsession_panel_index_struct_arr] = fn_plot_by_plot_col_row_panel_sets( ...
 		xsession.triallog_table, valid_cycle_ldx, triallog_cycle_key_list, xsession.record2D_table, valid_gaze_sample_ldx, xsession.per_state_valid_tick_sessionID_cycle_per_cycle_idx_cellarray, ...
 		xsession.gaze_on_object_prop_count_table, goopc_table_cycle_key_list, near_gaze_sample_ldx, far_gaze_sample_ldx, ...
 		target_ignore_list, xsession.face_ROI, ...
@@ -1024,6 +1043,20 @@ if (plot_2d_and_object_proportions_xsession)
 		col_unique_keys, sorted_col_set_list, col_data_row_key_idx_arr, ...
 		row_unique_keys, sorted_row_set_list, row_data_row_key_idx_arr, ...
 		aggregation_type_string, out_dir, plotting_options_struct );
+
+
+	[xsession_dyadic_solo_stats_table, xsession_dyadic_solo_meta] = ...
+		fn_fit_dyadic_vs_solo_gaze_glme(xsession_panel_index_struct_arr, xsession.gaze_on_object_prop_count_table, 0.05, 1, 1, 0);
+	if ~isempty(xsession_dyadic_solo_stats_table)
+		stats_out_dir = fullfile(out_dir, aggregation_type_string);
+		if ~isfolder(stats_out_dir), mkdir(stats_out_dir); end
+		save(fullfile(stats_out_dir, 'dyadic_vs_solo_stats_glmm.mat'), 'xsession_dyadic_solo_stats_table', 'xsession_dyadic_solo_meta');
+		writetable(xsession_dyadic_solo_stats_table, fullfile(stats_out_dir, 'dyadic_vs_solo_stats_glmm.csv'));
+		fn_plot_dyadic_solo_paired_objects(xsession_panel_index_struct_arr, xsession.gaze_on_object_prop_count_table, xsession_dyadic_solo_stats_table, aggregation_type_string, out_dir, plotting_options_struct, sorted_col_set_list, sorted_row_set_list, target_ignore_list);
+	end
+	if (close_plots_automatically)
+		close all;
+	end
 end
 
 % final end...
