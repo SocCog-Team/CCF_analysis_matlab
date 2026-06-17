@@ -1,4 +1,4 @@
-function [ cur_plot_fh_list ] = fn_plot_by_plot_col_row_panel_sets( ...
+function [ cur_plot_fh_list, panel_index_struct_arr  ] = fn_plot_by_plot_col_row_panel_sets( ...
 				triallog_table, valid_cycle_ldx, triallog_cycle_key_list, record2D_table, valid_gaze_sample_ldx, per_state_valid_tick_sessionID_cycle_per_cycle_idx_cellarray, ...
 				gaze_on_object_prop_count_table, goopc_table_cycle_key_list, near_gaze_sample_ldx, far_gaze_sample_ldx, ...
 				target_ignore_list, face_ROI, ...
@@ -12,6 +12,8 @@ function [ cur_plot_fh_list ] = fn_plot_by_plot_col_row_panel_sets( ...
 
 
 cur_plot_fh_list = [];
+panel_index_struct_arr = struct([]);
+panel_index_idx = 0;
 
 n_cols = length(col_unique_keys);
 if exist('sorted_col_set_list', 'var') && ~isempty(sorted_col_set_list)
@@ -29,6 +31,7 @@ n_panels = length(panel_request_list);
 
 for i_plot = 1 : length(plot_unique_keys)
 	cur_plot_set = plot_unique_keys{i_plot};
+	[cur_condition_string, cur_panel_group_key] = fn_local_parse_plot_set(cur_plot_set);
 	disp([mfilename, ': INFO: Procession plot: ', cur_plot_set]);
 	if ~contains(cur_plot_set, regexpPattern(plot_set_include_regexplist_list))
 		disp([mfilename, ': INFO: current plot set does not contain plot_set_include_regexplist_list, skipping: ', cur_plot_set]);
@@ -266,6 +269,18 @@ for i_plot = 1 : length(plot_unique_keys)
 						% find all relevant rows in gaze_on_object_prop_count_table
 						cur_selected_set_ldx = cur_plot_data_row_ldx & cur_col_data_row_ldx & cur_row_data_row_ldx;
 
+						if ~isempty(cur_condition_string)
+							panel_index_idx = panel_index_idx + 1;
+							panel_index_struct_arr(panel_index_idx).aggregation_type = aggregation_type_string;
+							panel_index_struct_arr(panel_index_idx).plot_set = cur_plot_set;
+							panel_index_struct_arr(panel_index_idx).panel_group_key = cur_panel_group_key;
+							panel_index_struct_arr(panel_index_idx).condition = cur_condition_string;
+							panel_index_struct_arr(panel_index_idx).epoch = cur_col_name;
+							panel_index_struct_arr(panel_index_idx).vergence = cur_row_name;
+							panel_index_struct_arr(panel_index_idx).goopc_row_ldx = cur_selected_set_ldx;
+						end
+
+
 						cur_data_array = nan([sum(cur_selected_set_ldx), length(gaze_on_object_proportion.data_col_name_list)]);
 						cur_xvec_array = cur_data_array;
 						cur_name_vec = cell(size(gaze_on_object_proportion.data_col_name_list));
@@ -385,7 +400,13 @@ for i_plot = 1 : length(plot_unique_keys)
 						if ~all(isnan(cur_data_array(:)))
 							swarmchart(cur_ah, cur_xvec_array, cur_data_array, 'filled', 'MarkerFaceAlpha', gaze_on_object_proportion.MarkerFaceAlpha, 'MarkerEdgeAlpha', gaze_on_object_proportion.MarkerEdgeAlpha, 'DisplayName', ['prop' '_', cur_row_name], 'SizeData', 3);
 							boxplot(cur_ah, cur_data_array, 'Symbol','');	% show no outliers, as we already show a swarmplot
-
+							add_mean_to_plots = 1;
+							if (add_mean_to_plots)
+								n_groups = size(cur_data_array, 2);
+								for i_group = 1 : n_groups
+									plot(cur_ah, mean(cur_xvec_array(:, i_group), 'omitnan'), mean(cur_data_array(:, i_group), 'omitnan'), 'DisplayName', ['mean' '_', cur_row_name, '_', cur_name_vec{i_group}], 'LineStyle', 'none', 'Marker', '+', 'MarkerSize', 5);
+								end
+							end
 
 							%xlabel(cur_ah,'gaze target', 'Interpreter', 'none', 'FontSize', plotting_options_struct.labelfontsize);
 							xticklabels(cur_name_vec)
@@ -430,5 +451,25 @@ for i_plot = 1 : length(plot_unique_keys)
 end
 
 
+end
+
+
+function [condition_string, panel_group_key] = fn_local_parse_plot_set(cur_plot_set)
+condition_string = [];
+panel_group_key = cur_plot_set;
+if contains(cur_plot_set, 'dyadic')
+	condition_string = 'dyadic';
+	panel_group_key = regexprep(cur_plot_set, '_dyadic$', '');
+elseif contains(cur_plot_set, 'solo')
+	condition_string = 'solo';
+	panel_group_key = regexprep(cur_plot_set, '_solo$', '');
+end
+% if plot_set is just "dyadic"/"solo", force common group key for pairing
+if strcmp(cur_plot_set, 'dyadic') || strcmp(cur_plot_set, 'solo')
+	panel_group_key = 'all';
+end
+if isempty(panel_group_key)
+	panel_group_key = 'all';
+end
 end
 
