@@ -265,6 +265,21 @@ for i_plot = 1 : length(plot_unique_keys)
 							'A_binocular_eye_on_selected_target_PCT', ...
 							'A_binocular_eye_on_other_targets_PCT', ...
 							};
+						% rerdered facr to the roght
+						gaze_on_object_proportion.data_col_name_list = {...
+							'A_binocular_eye_on_aims0_PCT',...
+							'A_binocular_eye_on_aims1_PCT', ...
+							'A_binocular_eye_on_selected_target_PCT', ...
+							'A_binocular_eye_on_other_targets_PCT', ...
+							...'A_binocular_eye_on_agent0_PCT',...
+							...'A_binocular_eye_on_agent1_PCT', ...
+							'A_binocular_eye_on_target0_PCT', ...
+							'A_binocular_eye_on_target1_PCT', ...
+							'A_binocular_eye_on_target2_PCT', ...
+							'A_binocular_eye_on_target3_PCT', ...
+							'A_binocular_eye_on_target4_PCT', ...
+							'A_binocular_eye_on_B_facecenter_PCT', ...
+							};
 
 						% find all relevant rows in gaze_on_object_prop_count_table
 						cur_selected_set_ldx = cur_plot_data_row_ldx & cur_col_data_row_ldx & cur_row_data_row_ldx;
@@ -356,6 +371,7 @@ for i_plot = 1 : length(plot_unique_keys)
 
 						end
 
+
 						if (only_include_all_target_fix_pct) && ~isempty(target_ignore_list)
 							ignore_target_col_ldx = ismember(cur_name_vec, target_ignore_list);
 						end
@@ -370,6 +386,21 @@ for i_plot = 1 : length(plot_unique_keys)
 							% this next one just gives the x values
 							% which we want to increment from 1
 							cur_xvec_array = cur_xvec_array(:, 1:sum(include_col_ldx));
+						end
+
+						color_by_group = [];
+						if isfield(plotting_options_struct, 'color_struct') && ~isempty(plotting_options_struct.color_struct)
+							for i_group = 1 : length(cur_name_vec)
+								cur_group_name = cur_name_vec{i_group};
+								if isfield(plotting_options_struct.color_struct, cur_group_name)
+									color_by_group = [color_by_group; plotting_options_struct.color_struct.(cur_group_name)];
+
+								else
+									disp([mfilename, ': WARN: plotting_options_struct.color_struct has no subfield for ', plotting_options_struct.color_struct]);
+									color_by_group = [];
+									break
+								end
+							end
 						end
 
 						% now do some statistics across the
@@ -398,13 +429,17 @@ for i_plot = 1 : length(plot_unique_keys)
 
 						hold on
 						if ~all(isnan(cur_data_array(:)))
-							swarmchart(cur_ah, cur_xvec_array, cur_data_array, 'filled', 'MarkerFaceAlpha', gaze_on_object_proportion.MarkerFaceAlpha, 'MarkerEdgeAlpha', gaze_on_object_proportion.MarkerEdgeAlpha, 'DisplayName', ['prop' '_', cur_row_name], 'SizeData', 3);
-							boxplot(cur_ah, cur_data_array, 'Symbol','');	% show no outliers, as we already show a swarmplot
+							if ~isempty(color_by_group)
+								swarmchart(cur_ah, cur_xvec_array, cur_data_array, [], color_by_group, 'filled', 'MarkerFaceAlpha', gaze_on_object_proportion.MarkerFaceAlpha, 'MarkerEdgeAlpha', gaze_on_object_proportion.MarkerEdgeAlpha, 'DisplayName', ['prop' '_', cur_row_name], 'SizeData', 3);								
+							else
+								swarmchart(cur_ah, cur_xvec_array, cur_data_array, 'filled', 'MarkerFaceAlpha', gaze_on_object_proportion.MarkerFaceAlpha, 'MarkerEdgeAlpha', gaze_on_object_proportion.MarkerEdgeAlpha, 'DisplayName', ['prop' '_', cur_row_name], 'SizeData', 3);
+							end
+							boxplot(cur_ah, cur_data_array, 'Symbol','', 'Color', [0.2 0.2 0.2]);	% show no outliers, as we already show a swarmplot
 							add_mean_to_plots = 1;
 							if (add_mean_to_plots)
 								n_groups = size(cur_data_array, 2);
 								for i_group = 1 : n_groups
-									plot(cur_ah, mean(cur_xvec_array(:, i_group), 'omitnan'), mean(cur_data_array(:, i_group), 'omitnan'), 'DisplayName', ['mean' '_', cur_row_name, '_', cur_name_vec{i_group}], 'LineStyle', 'none', 'Marker', '+', 'MarkerSize', 5);
+									plot(cur_ah, mean(cur_xvec_array(:, i_group), 'omitnan'), mean(cur_data_array(:, i_group), 'omitnan'), 'DisplayName', ['mean' '_', cur_row_name, '_', cur_name_vec{i_group}], 'LineStyle', 'none', 'Marker', '+', 'MarkerSize', 8, 'Color', [0.2 0.2 0.2]);
 								end
 							end
 

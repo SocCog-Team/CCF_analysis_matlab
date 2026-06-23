@@ -15,9 +15,24 @@ debug = 0;
 
 % control variables
 show_2D_fixations = 0;	% first variant, show 2D fixation positions for a specific epoch, splitting out near/far
+show_cycle_spatial_trajectories = 0;	% one tiled figure per sessionID x cycle (epochs x source rows)
+show_cycle_spatial_trajectories_xsession = 0;	% one tiled figure per sessionID x cycle (epochs x source rows)
+cycle_spatial_plot_sessionID_cycle_ldx = [];	% [] = all cycles; or logical/numeric index into unique sessionID_cycle keys
+cycle_spatial_source_stem_regexp_list = {'^aims[01]_X$', '^agent[01]_X$', '^[AB]_binocular_eye_X$'};
+cycle_spatial_source_row_name_list = {'hands', 'cursors', 'gaze'};
+cycle_spatial_goopc_pct_col_regexp_list = { ...
+	'^A_binocular_eye_on_target[0-4]_PCT$', ...
+	'^A_binocular_eye_on_B_facecenter_PCT$', ...
+	'^A_binocular_eye_on_aims[01]_PCT$', ...
+	...'^A_binocular_eye_on_aims[01]_PCT$', ...
+	};
+cycle_spatial_goopc_bar_vergence_list = {'nearFixations', 'farFixations'};
 plot_2d_and_object_proportions = 0;
 plot_2d_and_object_proportions_xsession = 1;
-
+perform_dyadic_solo_comparison = 0;
+perform_dyadic_solo_comparison_xsession = 1;
+dyadic_solo_significance_test_method = 'ranksum';      % 'glme' | 'ranksum' | 'ttest'
+dyadic_solo_significance_label_mode = 'direction'; % 'stars' | 'direction'
 
 % if we run this directly for testing we want/need this to be in the
 % path...
@@ -47,8 +62,9 @@ out_dir = fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', 'CCF', 'GAZE_
 plotting_options_struct = fn_BoS_ephys_default_plotting_options;
 % overrides
 plotting_options_struct.format_string_list = {'.png', '.fig'};
+plotting_options_struct.color_struct = fn_define_color_struct_CCF();
 close_plots_automatically = 1;
-
+plotting_options_struct.figure_visibility_string = 'off';	% invisible figures should be faster...
 
 if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_list)
 	cur_CCF_runfolder_FQN_list = { ...
@@ -112,7 +128,7 @@ end
 max_cycle_duration_s = 10;	% exclude cycles longer than this
 mean_dX_CCF_threshold = 0.05;	%(values smaller near fixation, values larger far fixations)
 % sample based
-min_gaze_confidence = 0.85;	% for binocular dominated by the eye with lower signal
+min_gaze_confidence = 0.50;	% for binocular dominated by the eye with lower signal
 valid_X_range = [-0.1, 1.1];	% add some margin around the playing field for valid samples
 valid_Y_range = [-0.1, 1.1];	% add some margin around the playing field for valid samples
 
@@ -319,7 +335,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 
 		case '20260428TNNNNNNM.A_Elmo.B_MIXED.SCP_01'
 			per_run_face_ROI_idx = repmat(find(ismember(face_ROI.names, {'face_right'})), n_src_runs, 1);
-			per_run_face_ROI_idx(end) = 1;			
+			per_run_face_ROI_idx(end) = 1;
 
 		case '20260429TNNNNNNM.A_Elmo.B_MIXED.SCP_01'
 			per_run_face_ROI_idx = repmat(find(ismember(face_ROI.names, {'face_right'})), n_src_runs, 1);
@@ -419,6 +435,11 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	%gaze_src_col_name_stem = 'A_binocular_eye';
 	valid_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_confidence']) >= min_gaze_confidence;
 
+	%% to check/select min_gaze_confidence use:
+	%cur_fh = figure();
+	%set(cur_fh, "Visible", 'On');
+	%hh = histogram(record2D_table.([gaze_src_col_name_stem, '_confidence']), 1000);
+
 	% 20260615 agred with igor, we only want to count samples on the paying
 	% field and 10% around it
 	valid_gaze_sample_ldx = valid_gaze_sample_ldx & record2D_table.([gaze_src_col_name_stem, '_X']) >= valid_X_range(1) & record2D_table.([gaze_src_col_name_stem, '_X']) <= valid_X_range(2);
@@ -489,15 +510,19 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	reference_object_position_stem_list = [aim_prefix_list, agent_prefix_list, target_prefix_list, 'B_facecenter'];	% for gaze_to_object_mapping_rule all this is fine, but for closest_object_within_threshold this is less fine
 	reference_object_position_stem_closeness_threshold_list = [zeros(size(aim_prefix_list)) + 0.05, zeros(size(agent_prefix_list)) + conf_struct.agent_radius*1.5, zeros(size(target_prefix_list)) + conf_struct.target_radius*1.5, face_ROI.radius];
 
-	
+
 	reference_object_position_stem_list = [target_prefix_list, 'B_facecenter'];	% use for closest_object_within_threshold
 	reference_object_position_stem_closeness_threshold_list = [zeros(size(target_prefix_list)) + conf_struct.target_radius*1.5, face_ROI.radius];
 
 	% 20260515 agrred with Igor:
-	reference_object_position_stem_list = [aim_prefix_list, target_prefix_list, 'B_facecenter'];	% use for closest_object_within_threshold
-	reference_object_position_stem_closeness_threshold_list = [zeros(size(aim_prefix_list)) + 0.05, zeros(size(target_prefix_list)) + conf_struct.target_radius*1.5, face_ROI.radius];
-	
-	
+	reference_object_position_stem_list = [	aim_prefix_list, ...
+											target_prefix_list, ...
+											'B_facecenter'];	% use for closest_object_within_threshold
+	reference_object_position_stem_closeness_threshold_list = [	zeros(size(aim_prefix_list)) + conf_struct.target_radius*2*1.1, ...
+																zeros(size(target_prefix_list)) + conf_struct.target_radius*1.5, ...
+																face_ROI.radius];
+
+
 	% we want/need to test for each sample whether it is close
 	% enough to any object to be cpunted as on that object
 	% for now do not assign things exclusively (by picking the closest if multiple objects qualify)
@@ -514,7 +539,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 	timestamps.(mfilename).per_cycle_proportion_count_loop.start = tic;
 	all_false_tick_ldx = false([size(record2D_table, 1), 1]);
 
-	version_string = 'v.007';
+	version_string = 'v.010';
 	target_state_exclusion_list = {'col_targ_initiate_reward'};% skip these states, col_targ_initiate_reward should only last 1 cycle...
 	gaze_to_object_mapping_rule = 'all';	% all: each gaze sample is counted for all below threshold distance objects ; closest_within_threshold: pick the closest object fullfilling the threshold condition
 
@@ -708,7 +733,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		%min_gaze_confidence = 0.85;%
 		%gaze_src_col_name_stem = 'A_binocular_eye';
 		valid_gaze_sample_ldx = record2D_table.([gaze_src_col_name_stem, '_confidence']) >= min_gaze_confidence;
-	
+
 		% 20260615 agred with igor, we only want to count samples on the paying
 		% field and 10% around it
 		valid_gaze_sample_ldx = valid_gaze_sample_ldx & record2D_table.([gaze_src_col_name_stem, '_X']) >= valid_X_range(1) & record2D_table.([gaze_src_col_name_stem, '_X']) <= valid_X_range(2);
@@ -774,7 +799,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 		panel_request_list = {'gaze2D_per_epoch', 'gaze_on_object_proportion'};
 		% n_panels = length(panel_request_list);
 
-		target_ignore_list = {'coop_A', 'coop_B', 'comp', 'pun', 'Solo_A', 'Solo_B', 'target0', 'target1', 'target2', 'target3', 'target4', 'target5', 'target6', 'target7', 'target8', 'target9'};
+		target_ignore_list = {'coop_A', 'coop_B', 'comp', 'pun', 'Solo_A', 'Solo_B', 'target0', 'target1', 'target2', 'target3', 'target4', 'target5', 'target6', 'target7', 'target8', 'target9', 'Targets'};
 		aggregation_type_string = 'per_session';
 
 		[cur_plot_fh_list, per_session_panel_index_struct_arr] = fn_plot_by_plot_col_row_panel_sets( ...
@@ -787,17 +812,59 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 			row_unique_keys, sorted_row_set_list, row_data_row_key_idx_arr, ...
 			aggregation_type_string, out_dir, plotting_options_struct );
 
-
-		[per_session_dyadic_solo_stats_table, per_session_dyadic_solo_meta] = ...
-			fn_fit_dyadic_vs_solo_gaze_glme(per_session_panel_index_struct_arr, gaze_on_object_prop_count_table, 0.05, 1, 1);
-		if ~isempty(per_session_dyadic_solo_stats_table)
-			stats_out_dir = fullfile(out_dir, aggregation_type_string);
-			if ~isfolder(stats_out_dir), mkdir(stats_out_dir); end
-			save(fullfile(stats_out_dir, 'dyadic_vs_solo_stats_glmm.mat'), 'per_session_dyadic_solo_stats_table', 'per_session_dyadic_solo_meta');
-			writetable(per_session_dyadic_solo_stats_table, fullfile(stats_out_dir, 'dyadic_vs_solo_stats_glmm.csv'));
-			fn_plot_dyadic_solo_paired_objects(per_session_panel_index_struct_arr, gaze_on_object_prop_count_table, per_session_dyadic_solo_stats_table, aggregation_type_string, out_dir, plotting_options_struct, sorted_col_set_list, sorted_row_set_list, target_ignore_list);
+		if (perform_dyadic_solo_comparison)
+			[per_session_dyadic_solo_stats_table, per_session_dyadic_solo_meta] = ...
+				fn_fit_dyadic_vs_solo_gaze_glme(per_session_panel_index_struct_arr, gaze_on_object_prop_count_table, 0.05, 1, 1, 0, dyadic_solo_significance_test_method);
+			if ~isempty(per_session_dyadic_solo_stats_table)
+				stats_out_dir = fullfile(out_dir, aggregation_type_string);
+				if ~isfolder(stats_out_dir), mkdir(stats_out_dir); end
+				save(fullfile(stats_out_dir, 'dyadic_vs_solo_stats_glmm.mat'), 'per_session_dyadic_solo_stats_table', 'per_session_dyadic_solo_meta');
+				writetable(per_session_dyadic_solo_stats_table, fullfile(stats_out_dir, 'dyadic_vs_solo_stats_glmm.csv'));
+				fn_plot_dyadic_solo_paired_objects(per_session_panel_index_struct_arr, gaze_on_object_prop_count_table, per_session_dyadic_solo_stats_table, aggregation_type_string, out_dir, plotting_options_struct, sorted_col_set_list, sorted_row_set_list, target_ignore_list, dyadic_solo_significance_label_mode, dyadic_solo_significance_test_method);
+			end
 		end
-		if (close_plots_automatically)
+
+		% cur_plot_fh_list can be quite large
+		if (close_plots_automatically) || strcmp(plotting_options_struct.figure_visibility_string, 'off')
+			close all;
+		end
+
+
+		if show_cycle_spatial_trajectories
+			cur_plotting_options_struct = plotting_options_struct;
+			cur_plotting_options_struct.format_string_list = {'.pdf'};
+			%cur_plotting_options_struct.figure_visibility_string = 'On';
+			%cycle_spatial_goopc_bar_vergence_list = {'nearFixations', 'farFixations'};
+
+			%max_subset_cycles = 40;	% how many subsets to pick per cycle
+			%shuffled_cycle_idx = randperm(size(triallog_table, 1)); % thids might still might conttain indices too large for imndividual subsets, but we clean this later in fn_plot_cycle_spatial_trajectories_per_epoch
+			%cycle_spatial_plot_sessionID_cycle_ldx = shuffled_cycle_idx(1:min(max_subset_cycles, size(triallog_table, 1)));
+			%cycle_spatial_plot_sessionID_cycle_ldx = [1000, 1050, 2000];
+			
+			fn_plot_cycle_spatial_trajectories_per_epoch( ...
+				record2D_table, ...
+				triallog_table, ...
+				per_state_valid_tick_sessionID_cycle_per_cycle_idx_cellarray, ...
+				short_all_epoch_name_list, ...
+				valid_gaze_sample_ldx, ...
+				face_ROI, ...
+				target_prefix_list, ...
+				conf_struct.target_radius, ...
+				cycle_spatial_source_stem_regexp_list, ...
+				cur_plotting_options_struct, ...
+				sorted_col_set_list, ...
+				valid_X_range, ...
+				valid_Y_range, ...
+				aggregation_type_string, ...
+				fullfile(out_dir, aggregation_type_string, cur_sessionID, 'per_cycle'), ...
+				cycle_spatial_plot_sessionID_cycle_ldx, ...
+				cycle_spatial_source_row_name_list, ...
+				gaze_on_object_prop_count_table, ...
+				goopc_table_cycle_key_list, ...
+				cycle_spatial_goopc_pct_col_regexp_list, ...
+				cycle_spatial_goopc_bar_vergence_list);
+		end
+		if (close_plots_automatically) || strcmp(plotting_options_struct.figure_visibility_string, 'off')
 			close all;
 		end
 	end
@@ -910,7 +977,7 @@ for i_runfolder = 1 : length(cur_CCF_runfolder_FQN_list)
 				disp(['Saving figure as: ', cur_out_FQN]);
 				write_out_figure(cur_fh, cur_out_FQN);
 
-				if (close_plots_automatically)
+				if (close_plots_automatically) || strcmp(plotting_options_struct.figure_visibility_string, 'off')
 					close all;
 				end
 			end
@@ -1034,6 +1101,17 @@ if (plot_2d_and_object_proportions_xsession)
 
 	target_ignore_list = {'coop_A', 'coop_B', 'comp', 'pun', 'Solo_A', 'Solo_B', 'target0', 'target1', 'target2', 'target3', 'target4', 'target5', 'target6', 'target7', 'target8', 'target9', 'Targets'};
 	aggregation_type_string = 'across_sessions';
+
+	xsession_target_prefix_list = {};
+	xsession_record2D_colname_list = xsession.record2D_table.Properties.VariableNames;
+	for i_col = 1 : length(xsession_record2D_colname_list)
+		cur_target_prefix_cell = regexp(xsession_record2D_colname_list{i_col}, '^target\d*', 'match');
+		if ~isempty(cur_target_prefix_cell)
+			xsession_target_prefix_list = [xsession_target_prefix_list, cur_target_prefix_cell{1}]; %#ok<AGROW>
+		end
+	end
+	xsession_target_prefix_list = unique(xsession_target_prefix_list);
+
 	[cur_plot_fh_list, xsession_panel_index_struct_arr] = fn_plot_by_plot_col_row_panel_sets( ...
 		xsession.triallog_table, valid_cycle_ldx, triallog_cycle_key_list, xsession.record2D_table, valid_gaze_sample_ldx, xsession.per_state_valid_tick_sessionID_cycle_per_cycle_idx_cellarray, ...
 		xsession.gaze_on_object_prop_count_table, goopc_table_cycle_key_list, near_gaze_sample_ldx, far_gaze_sample_ldx, ...
@@ -1044,17 +1122,55 @@ if (plot_2d_and_object_proportions_xsession)
 		row_unique_keys, sorted_row_set_list, row_data_row_key_idx_arr, ...
 		aggregation_type_string, out_dir, plotting_options_struct );
 
+	if (perform_dyadic_solo_comparison_xsession)
+		%cur_plotting_options_struct.figure_visibility_string = 'On';
+		%dyadic_solo_significance_test_method = 'glme';      % 'glme' | 'ranksum' | 'ttest'
+		%dyadic_solo_significance_label_mode = 'direction'; % 'stars' | 'direction'
 
-	[xsession_dyadic_solo_stats_table, xsession_dyadic_solo_meta] = ...
-		fn_fit_dyadic_vs_solo_gaze_glme(xsession_panel_index_struct_arr, xsession.gaze_on_object_prop_count_table, 0.05, 1, 1, 0);
-	if ~isempty(xsession_dyadic_solo_stats_table)
-		stats_out_dir = fullfile(out_dir, aggregation_type_string);
-		if ~isfolder(stats_out_dir), mkdir(stats_out_dir); end
-		save(fullfile(stats_out_dir, 'dyadic_vs_solo_stats_glmm.mat'), 'xsession_dyadic_solo_stats_table', 'xsession_dyadic_solo_meta');
-		writetable(xsession_dyadic_solo_stats_table, fullfile(stats_out_dir, 'dyadic_vs_solo_stats_glmm.csv'));
-		fn_plot_dyadic_solo_paired_objects(xsession_panel_index_struct_arr, xsession.gaze_on_object_prop_count_table, xsession_dyadic_solo_stats_table, aggregation_type_string, out_dir, plotting_options_struct, sorted_col_set_list, sorted_row_set_list, target_ignore_list);
+		[xsession_dyadic_solo_stats_table, xsession_dyadic_solo_meta] = ...
+			fn_fit_dyadic_vs_solo_gaze_glme(xsession_panel_index_struct_arr, xsession.gaze_on_object_prop_count_table, 0.05, 1, 1, 0, dyadic_solo_significance_test_method);
+		if ~isempty(xsession_dyadic_solo_stats_table)
+			stats_out_dir = fullfile(out_dir, aggregation_type_string);
+			if ~isfolder(stats_out_dir), mkdir(stats_out_dir); end
+			save(fullfile(stats_out_dir, 'dyadic_vs_solo_stats_glmm.mat'), 'xsession_dyadic_solo_stats_table', 'xsession_dyadic_solo_meta');
+			writetable(xsession_dyadic_solo_stats_table, fullfile(stats_out_dir, 'dyadic_vs_solo_stats_glmm.csv'));
+			fn_plot_dyadic_solo_paired_objects(xsession_panel_index_struct_arr, xsession.gaze_on_object_prop_count_table, xsession_dyadic_solo_stats_table, aggregation_type_string, out_dir, plotting_options_struct, sorted_col_set_list, sorted_row_set_list, target_ignore_list, dyadic_solo_significance_label_mode, dyadic_solo_significance_test_method);
+		end
 	end
-	if (close_plots_automatically)
+
+	% cur_plot_fh_list can be quite large
+	if (close_plots_automatically) || strcmp(plotting_options_struct.figure_visibility_string, 'off')
+		close all;
+	end
+
+	if show_cycle_spatial_trajectories_xsession
+		cur_plotting_options_struct = plotting_options_struct;
+		cur_plotting_options_struct.format_string_list = {'.pdf'};
+
+		fn_plot_cycle_spatial_trajectories_per_epoch( ...
+			xsession.record2D_table, ...
+			xsession.triallog_table, ...
+			xsession.per_state_valid_tick_sessionID_cycle_per_cycle_idx_cellarray, ...
+			short_all_epoch_name_list, ...
+			valid_gaze_sample_ldx, ...
+			xsession.face_ROI, ...
+			xsession_target_prefix_list, ...
+			conf_struct.target_radius, ...
+			cycle_spatial_source_stem_regexp_list, ...
+			cur_plotting_options_struct, ...
+			sorted_col_set_list, ...
+			valid_X_range, ...
+			valid_Y_range, ...
+			aggregation_type_string, ...
+			fullfile(out_dir, aggregation_type_string, 'per_cycle'), ...
+			cycle_spatial_plot_sessionID_cycle_ldx, ...
+			cycle_spatial_source_row_name_list, ...
+			xsession.gaze_on_object_prop_count_table, ...
+			goopc_table_cycle_key_list, ...
+			cycle_spatial_goopc_pct_col_regexp_list, ...
+			cycle_spatial_goopc_bar_vergence_list);
+	end
+	if (close_plots_automatically) || strcmp(plotting_options_struct.figure_visibility_string, 'off')
 		close all;
 	end
 end

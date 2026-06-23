@@ -1,10 +1,14 @@
-function [stats_table, meta_struct] = fn_fit_dyadic_vs_solo_gaze_glme(panel_index_struct_arr, gaze_on_object_prop_count_table, qval, use_cV_one, enable_ranksum_fallback, force_ranksum_only)
+function [stats_table, meta_struct] = fn_fit_dyadic_vs_solo_gaze_glme(panel_index_struct_arr, gaze_on_object_prop_count_table, qval, use_cV_one, enable_ranksum_fallback, force_ranksum_only, primary_test_method)
 %FN_FIT_DYADIC_VS_SOLO_GAZE_GLME
 % Uses panel indices (from plotting function) + source GOOPC table.
 % Fits dyadic vs solo per panel_group_key x epoch x vergence x object.
-% Primary test: binomial GLMM; fallback: ranksum on cycle-level percentages.
-% Set force_ranksum_only = 1 to bypass GLMM and use ranksum for every
-% testable panel/object.
+%
+% primary_test_method (optional, 7th arg):
+%   'glme'    — binomial GLMM; optional ranksum fallback on fit failure
+%   'ranksum' — Wilcoxon rank-sum on cycle-level percentages
+%   'ttest'   — two-sample t-test on cycle-level percentages
+%
+% Legacy: force_ranksum_only = 1 is equivalent to primary_test_method = 'ranksum'.
 % FDR correction: fdr_adj()
 
 timestamps.(mfilename).start = tic;
@@ -15,6 +19,14 @@ if ~exist('qval', 'var') || isempty(qval), qval = 0.05; end
 if ~exist('use_cV_one', 'var') || isempty(use_cV_one), use_cV_one = 1; end
 if ~exist('enable_ranksum_fallback', 'var') || isempty(enable_ranksum_fallback), enable_ranksum_fallback = 1; end
 if ~exist('force_ranksum_only', 'var') || isempty(force_ranksum_only), force_ranksum_only = 0; end
+if ~exist('primary_test_method', 'var') || isempty(primary_test_method)
+	if force_ranksum_only
+		primary_test_method = 'ranksum';
+	else
+		primary_test_method = 'glme';
+	end
+end
+primary_test_method = fn_local_normalize_test_method(primary_test_method);
 
 % Robustness thresholds
 min_rows_per_group = 5;
@@ -70,7 +82,7 @@ for i_scope = 1 : numel(unique_scope_key)
 		if sum(valid_ldx) < min_total_rows
 			cur_row_struct = fn_local_make_stats_row(cur_scope_table, dyad_i, cur_obj, sum(valid_ldx), ...
 				'not_testable', 'insufficient_total_rows', nan, nan, nan, nan, nan, ...
-				median(dyad_pct, 'omitnan'), median(solo_pct, 'omitnan'), nan, nan, ...
+				median(dyad_pct, 'omitnan'), median(solo_pct, 'omitnan'), mean(dyad_pct, 'omitnan'), mean(solo_pct, 'omitnan'), nan, nan, nan, ...
 				sum(isfinite(dyad_pct)), sum(isfinite(solo_pct)), false);
 			stats_struct_arr = fn_local_append_stats_row(stats_struct_arr, cur_row_struct);
 			continue
@@ -84,69 +96,97 @@ for i_scope = 1 : numel(unique_scope_key)
 
 		median_pct_dyadic = median(dyad_pct, 'omitnan');
 		median_pct_solo = median(solo_pct, 'omitnan');
+		mean_pct_dyadic = mean(dyad_pct, 'omitnan');
+		mean_pct_solo = mean(solo_pct, 'omitnan');
 		n_dyadic = sum(cur_tbl.solo_dyadic == 'dyadic');
 		n_solo = sum(cur_tbl.solo_dyadic == 'solo');
 
 		if n_dyadic < min_rows_per_group || n_solo < min_rows_per_group
 			cur_row_struct = fn_local_make_stats_row(cur_scope_table, dyad_i, cur_obj, height(cur_tbl), ...
 				'not_testable', 'insufficient_rows_per_group', nan, nan, nan, nan, nan, ...
-				median_pct_dyadic, median_pct_solo, nan, nan, n_dyadic, n_solo, false);
+				median_pct_dyadic, median_pct_solo, mean_pct_dyadic, mean_pct_solo, nan, nan, nan, n_dyadic, n_solo, false);
 			stats_struct_arr = fn_local_append_stats_row(stats_struct_arr, cur_row_struct);
 			continue
 		end
 
-		if force_ranksum_only
-			glmm_fail_reason = 'forced_ranksum_only';
-		else
-			% Try GLMM directly; fallback only on actual fit failure.
-			try
-				glme = fitglme(cur_tbl, 'successes ~ 1 + solo_dyadic + (1|sessionID)', ...
-					'Distribution', 'Binomial', ...
-					'Link', 'logit', ...
-					'BinomialSize', cur_tbl.trials, ...
-					'FitMethod', 'Laplace');
+		switch primary_test_method
+			case 'glme'
+				glmm_fail_reason = '';
+				try
+					glme = fitglme(cur_tbl, 'successes ~ 1 + solo_dyadic + (1|sessionID)', ...
+						'Distribution', 'Binomial', ...
+						'Link', 'logit', ...
+						'BinomialSize', cur_tbl.trials, ...
+						'FitMethod', 'Laplace');
 
-				coef_idx = find(contains(glme.CoefficientNames, 'solo_dyadic_solo'), 1, 'first');
-				if isempty(coef_idx)
-					coef_idx = find(contains(glme.CoefficientNames, 'solo_dyadic'), 1, 'last');
+					coef_idx = find(contains(glme.CoefficientNames, 'solo_dyadic_solo'), 1, 'first');
+					if isempty(coef_idx)
+						coef_idx = find(contains(glme.CoefficientNames, 'solo_dyadic'), 1, 'last');
+					end
+					if isempty(coef_idx)
+						error([mfilename, ': missing solo_dyadic coefficient']);
+					end
+
+					beta = glme.Coefficients.Estimate(coef_idx);
+					p = glme.Coefficients.pValue(coef_idx);
+					ci = coefCI(glme);
+
+					cur_row_struct = fn_local_make_stats_row(cur_scope_table, dyad_i, cur_obj, height(cur_tbl), ...
+						'glme', '', beta, exp(beta), exp(ci(coef_idx, 1)), exp(ci(coef_idx, 2)), p, ...
+						median_pct_dyadic, median_pct_solo, mean_pct_dyadic, mean_pct_solo, nan, nan, nan, n_dyadic, n_solo, true);
+					stats_struct_arr = fn_local_append_stats_row(stats_struct_arr, cur_row_struct);
+					continue
+				catch ME
+					glmm_fail_reason = ME.message;
 				end
-				if isempty(coef_idx)
-					error([mfilename, ': missing solo_dyadic coefficient']);
+
+				if enable_ranksum_fallback
+					try
+						[p_rs, ~, stats_rs] = ranksum(dyad_pct, solo_pct, 'method', 'approximate');
+						cur_row_struct = fn_local_make_stats_row(cur_scope_table, dyad_i, cur_obj, numel(dyad_pct) + numel(solo_pct), ...
+							'ranksum', glmm_fail_reason, nan, nan, nan, nan, p_rs, ...
+							median_pct_dyadic, median_pct_solo, mean_pct_dyadic, mean_pct_solo, stats_rs.zval, stats_rs.ranksum, nan, n_dyadic, n_solo, true);
+						stats_struct_arr = fn_local_append_stats_row(stats_struct_arr, cur_row_struct);
+					catch ME2
+						cur_row_struct = fn_local_make_stats_row(cur_scope_table, dyad_i, cur_obj, numel(dyad_pct) + numel(solo_pct), ...
+							'not_testable', ['fallback_failed: ', ME2.message], nan, nan, nan, nan, nan, ...
+							median_pct_dyadic, median_pct_solo, mean_pct_dyadic, mean_pct_solo, nan, nan, nan, n_dyadic, n_solo, false);
+						stats_struct_arr = fn_local_append_stats_row(stats_struct_arr, cur_row_struct);
+					end
+				else
+					cur_row_struct = fn_local_make_stats_row(cur_scope_table, dyad_i, cur_obj, numel(dyad_pct) + numel(solo_pct), ...
+						'not_testable', ['glme_failed_no_fallback: ', glmm_fail_reason], nan, nan, nan, nan, nan, ...
+						median_pct_dyadic, median_pct_solo, mean_pct_dyadic, mean_pct_solo, nan, nan, nan, n_dyadic, n_solo, false);
+					stats_struct_arr = fn_local_append_stats_row(stats_struct_arr, cur_row_struct);
 				end
 
-				beta = glme.Coefficients.Estimate(coef_idx);
-				p = glme.Coefficients.pValue(coef_idx);
-				ci = coefCI(glme);
+			case 'ranksum'
+				try
+					[p_rs, ~, stats_rs] = ranksum(dyad_pct, solo_pct, 'method', 'approximate');
+					cur_row_struct = fn_local_make_stats_row(cur_scope_table, dyad_i, cur_obj, numel(dyad_pct) + numel(solo_pct), ...
+						'ranksum', '', nan, nan, nan, nan, p_rs, ...
+						median_pct_dyadic, median_pct_solo, mean_pct_dyadic, mean_pct_solo, stats_rs.zval, stats_rs.ranksum, nan, n_dyadic, n_solo, true);
+					stats_struct_arr = fn_local_append_stats_row(stats_struct_arr, cur_row_struct);
+				catch ME2
+					cur_row_struct = fn_local_make_stats_row(cur_scope_table, dyad_i, cur_obj, numel(dyad_pct) + numel(solo_pct), ...
+						'not_testable', ['ranksum_failed: ', ME2.message], nan, nan, nan, nan, nan, ...
+						median_pct_dyadic, median_pct_solo, mean_pct_dyadic, mean_pct_solo, nan, nan, nan, n_dyadic, n_solo, false);
+					stats_struct_arr = fn_local_append_stats_row(stats_struct_arr, cur_row_struct);
+				end
 
-				cur_row_struct = fn_local_make_stats_row(cur_scope_table, dyad_i, cur_obj, height(cur_tbl), ...
-					'glme_binomial', '', beta, exp(beta), exp(ci(coef_idx, 1)), exp(ci(coef_idx, 2)), p, ...
-					median_pct_dyadic, median_pct_solo, nan, nan, n_dyadic, n_solo, true);
-				stats_struct_arr = fn_local_append_stats_row(stats_struct_arr, cur_row_struct);
-				continue
-			catch ME
-				glmm_fail_reason = ME.message;
-			end
-		end
-
-		% fallback path, or explicitly requested simple ranksum mode
-		if enable_ranksum_fallback || force_ranksum_only
-			try
-				[p_rs, ~, stats_rs] = ranksum(dyad_pct, solo_pct, 'method', 'approximate');
-				cur_row_struct = fn_local_make_stats_row(cur_scope_table, dyad_i, cur_obj, numel(dyad_pct) + numel(solo_pct), ...
-					fn_local_get_ranksum_method_name(force_ranksum_only), glmm_fail_reason, nan, nan, nan, nan, p_rs, ...
-					median_pct_dyadic, median_pct_solo, stats_rs.zval, stats_rs.ranksum, n_dyadic, n_solo, true);
-				stats_struct_arr = fn_local_append_stats_row(stats_struct_arr, cur_row_struct);
-			catch ME2
-				cur_row_struct = fn_local_make_stats_row(cur_scope_table, dyad_i, cur_obj, numel(dyad_pct) + numel(solo_pct), ...
-					'not_testable', ['fallback_failed: ', ME2.message], nan, nan, nan, nan, nan, ...
-					median_pct_dyadic, median_pct_solo, nan, nan, n_dyadic, n_solo, false);
-				stats_struct_arr = fn_local_append_stats_row(stats_struct_arr, cur_row_struct);
-			end
-		else
-			cur_row_struct = fn_local_make_stats_row(cur_scope_table, dyad_i, cur_obj, numel(dyad_pct) + numel(solo_pct), ...
-				'not_testable', ['glmm_failed_no_fallback: ', glmm_fail_reason], nan, nan, nan, nan, nan, ...
-				median_pct_dyadic, median_pct_solo, nan, nan, n_dyadic, n_solo, false);
-			stats_struct_arr = fn_local_append_stats_row(stats_struct_arr, cur_row_struct);
+			case 'ttest'
+				try
+					[~, p_tt, ~, stats_tt] = ttest2(dyad_pct, solo_pct);
+					cur_row_struct = fn_local_make_stats_row(cur_scope_table, dyad_i, cur_obj, numel(dyad_pct) + numel(solo_pct), ...
+						'ttest', '', nan, nan, nan, nan, p_tt, ...
+						median_pct_dyadic, median_pct_solo, mean_pct_dyadic, mean_pct_solo, nan, nan, stats_tt.tstat, n_dyadic, n_solo, true);
+					stats_struct_arr = fn_local_append_stats_row(stats_struct_arr, cur_row_struct);
+				catch ME2
+					cur_row_struct = fn_local_make_stats_row(cur_scope_table, dyad_i, cur_obj, numel(dyad_pct) + numel(solo_pct), ...
+						'not_testable', ['ttest_failed: ', ME2.message], nan, nan, nan, nan, nan, ...
+						median_pct_dyadic, median_pct_solo, mean_pct_dyadic, mean_pct_solo, nan, nan, nan, n_dyadic, n_solo, false);
+					stats_struct_arr = fn_local_append_stats_row(stats_struct_arr, cur_row_struct);
+				end
 		end
 	end
 end
@@ -172,6 +212,7 @@ meta_struct.qval = qval;
 meta_struct.use_cV_one = use_cV_one;
 meta_struct.enable_ranksum_fallback = enable_ranksum_fallback;
 meta_struct.force_ranksum_only = force_ranksum_only;
+meta_struct.primary_test_method = primary_test_method;
 meta_struct.min_rows_per_group = min_rows_per_group;
 meta_struct.min_total_rows = min_total_rows;
 meta_struct.n_tests_total = n_tests_total;
@@ -223,7 +264,7 @@ if strcmp(object_label, 'Targets') && all(isnan(obj_n))
 end
 end
 
-function row_struct = fn_local_make_stats_row(scope_table, dyad_i, object_label, n_obs, test_method, fallback_reason, beta, or_val, or_ci_low, or_ci_high, p, median_pct_dyadic, median_pct_solo, ranksum_zval, ranksum_ranksum, n_dyadic, n_solo, is_testable)
+function row_struct = fn_local_make_stats_row(scope_table, dyad_i, object_label, n_obs, test_method, fallback_reason, beta, or_val, or_ci_low, or_ci_high, p, median_pct_dyadic, median_pct_solo, mean_pct_dyadic, mean_pct_solo, ranksum_zval, ranksum_ranksum, ttest_tstat, n_dyadic, n_solo, is_testable)
 row_struct.aggregation_type = scope_table.aggregation_type{dyad_i};
 row_struct.panel_group_key = scope_table.panel_group_key{dyad_i};
 row_struct.epoch = scope_table.epoch{dyad_i};
@@ -242,8 +283,11 @@ row_struct.or_ci_high = or_ci_high;
 row_struct.p = p;
 row_struct.median_pct_dyadic = median_pct_dyadic;
 row_struct.median_pct_solo = median_pct_solo;
+row_struct.mean_pct_dyadic = mean_pct_dyadic;
+row_struct.mean_pct_solo = mean_pct_solo;
 row_struct.ranksum_zval = ranksum_zval;
 row_struct.ranksum_ranksum = ranksum_ranksum;
+row_struct.ttest_tstat = ttest_tstat;
 end
 
 
@@ -257,11 +301,23 @@ stats_struct_arr(end+1) = cur_row_struct;
 end
 
 
-function method_name = fn_local_get_ranksum_method_name(force_ranksum_only)
-if force_ranksum_only
-	method_name = 'ranksum_forced';
+function test_method = fn_local_normalize_test_method(test_method)
+if isstring(test_method) || ischar(test_method)
+	test_method = char(test_method);
 else
-	method_name = 'ranksum_fallback';
+	test_method = 'glme';
+end
+
+switch lower(test_method)
+	case {'glme', 'glmm', 'glme_binomial'}
+		test_method = 'glme';
+	case {'ranksum', 'ranksum_forced', 'ranksum_fallback', 'wilcoxon'}
+		test_method = 'ranksum';
+	case {'ttest', 'ttest2', 't-test'}
+		test_method = 'ttest';
+	otherwise
+		disp([mfilename, ': WARN: unknown primary_test_method "', test_method, '"; using glme.']);
+		test_method = 'glme';
 end
 end
 
