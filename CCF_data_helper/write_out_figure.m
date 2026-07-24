@@ -112,7 +112,35 @@ for i_output_type = 1 : length(output_type_list)
 			disp([mfilename, ': File already exists, let''s delete it to avoid silly windows errors...'])
 		end
 		try
-			exportgraphics(img_fh, cur_outfile_fqn, 'BackgroundColor', 'none', 'ContentType', 'vector'); % otherwise pdf export choes on multiple transparent overlapping patches
+			% 2025b is special at leat under windows, so do not run a
+			% costly but futile attempt here
+			if (length(cur_outfile_fqn) < 250) || isMATLABReleaseOlderThan("R2024a","release") || ~ispc
+				exportgraphics(img_fh, cur_outfile_fqn, 'BackgroundColor', 'none', 'ContentType', 'vector'); % otherwise pdf export chokes on multiple transparent overlapping patches
+
+				% matlab 2025b fails without exception if the name is too
+				% long...
+			else
+				if ~isfile(cur_outfile_fqn) && ~isMATLABReleaseOlderThan("R2025a","release")
+					[cur_path, cur_name, cur_ext] = fileparts(cur_outfile_fqn);
+
+					valid_chars_list = ['a':'z','A':'Z', '0':'9'];
+					intermediate_name = valid_chars_list(randi(length(valid_chars_list), 1, 24)); % to avoid clobbering the same file from multiple writers use random names...
+
+					intermediate_name_ext = [intermediate_name, cur_ext];
+					intermediate_fqn = fullfile(tempdir, intermediate_name_ext);
+					% if ispc
+					% 	% argh, windows is special here
+					% 	[status, win_temp_dir_FQD] = system('ECHO %TEMP%'); % NOTE this carries a CR at the end or a LF, so ignore the last position
+					% 	intermediate_fqn = fullfile(win_temp_dir_FQD(1:end-1), intermediate_name_ext);
+					% else
+					% 	% this seems to work on linux and macos (so for ~ispc)
+					% 	intermediate_fqn = fullfile('/tmp', intermediate_name_ext);
+					% end
+					exportgraphics(img_fh, intermediate_fqn, 'BackgroundColor', 'none', 'ContentType', 'vector');
+					[status,msg,msgID] = movefile(intermediate_fqn, cur_outfile_fqn);
+				end
+			end
+
 		catch ME
 			ME
 
@@ -134,14 +162,15 @@ for i_output_type = 1 : length(output_type_list)
 					intermediate_name = valid_chars_list(randi(length(valid_chars_list), 1, 24)); % to avoid clobbering the same file from multiple writers use random names...
 
 					intermediate_name_ext = [intermediate_name, cur_ext];
-					if ispc
-						% argh, windows is special here
-						[status, win_temp_dir_FQD] = system('ECHO %TEMP%'); % NOTE this carries a CR at the end or a LF, so ignore the last position
-						intermediate_fqn = fullfile(win_temp_dir_FQD(1:end-1), intermediate_name_ext)
-					else
-						% this seems to work on linux and macos (so for ~ispc)
-						intermediate_fqn = fullfile('/temp', intermediate_name_ext);
-					end
+					intermediate_fqn = fullfile(tempdir, intermediate_name_ext);
+					% if ispc
+					% 	argh, windows is special here
+					% 	[status, win_temp_dir_FQD] = system('ECHO %TEMP%'); % NOTE this carries a CR at the end or a LF, so ignore the last position
+					% 	intermediate_fqn = fullfile(win_temp_dir_FQD(1:end-1), intermediate_name_ext)
+					% else
+					% 	this seems to work on linux and macos (so for ~ispc)
+					% 	intermediate_fqn = fullfile('/tmp', intermediate_name_ext);
+					% end
 					exportgraphics(img_fh, intermediate_fqn, 'BackgroundColor', 'none', 'ContentType', 'vector');
 					[status,msg,msgID] = movefile(intermediate_fqn, cur_outfile_fqn);
 				end
