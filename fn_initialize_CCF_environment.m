@@ -16,7 +16,7 @@ if ~isempty(strfind(path_string, [start_dir, pathsep]))
 	disp('Current directory already in the path; deleting all subdirectories from the path to work around network share issues...');
 	% turn the path into cell array
 	while length(path_string) > 0
-		[cur_path_item, remain] = strtok(path_string, ';:');
+		[cur_path_item, remain] = strtok(path_string, pathsep);
 		path_string = remain(2:end);
 		if ~isempty(strfind(cur_path_item, start_dir))
 			rmpath(cur_path_item);

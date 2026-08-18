@@ -5,8 +5,9 @@ function [ ] = fn_ba_cycle_visualisations( cur_CCF_runfolder_FQN_list )
 
 % if we run this directly for testing we want/need this to be in the
 % path...
-if ~exist('cur_CCF_runfolder_FQN_list', 'var')
-	CCF_analysis_path = fullfile('C:', 'SCP_CODE', 'CCF_analysis_matlab');
+if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_list)
+	by_host_DirectoriesStruct = GetDirectoriesByHostName('local_code');
+	CCF_analysis_path = fullfile(by_host_DirectoriesStruct.SCP_CODE_BaseDir, 'CCF_analysis_matlab');
 	% delete existing paths containing the calling directory
 	% this is a work around for matlab's inability to detect changed files on
 	% most network shares
@@ -15,7 +16,7 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var')
 		disp('Current directory already in the path; deleting all subdirectories from the path to work around network share issues...');
 		% turn the path into cell array
 		while length(path_string) > 0
-			[cur_path_item, remain] = strtok(path_string, ';:');
+			[cur_path_item, remain] = strtok(path_string, pathsep);
 			path_string = remain(2:end);
 			if ~isempty(strfind(cur_path_item, CCF_analysis_path))
 				rmpath(cur_path_item);
@@ -24,26 +25,24 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var')
 	end
 	% now add them again
 	addpath(genpath(CCF_analysis_path));
-end
 
-
-if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_list)
+	[SESSIONLOGS_dir, cur_SCP_DATA_BaseDir] = fn_get_SESSIONLOGS_dir_for_host();
 
 	% Y:\SCP_DATA\SCP-CTRL-01\SESSIONLOGS\2025\251205\20251205T185226.A_NONE.B_NONE.SCP_01.sessiondir\TDT\SCP_DAG_v26_PZ5ms-251205-185203
 	cur_CCF_runfolder_FQN_list = {...
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251205', '20251205T185226.A_NONE.B_NONE.SCP_01.sessiondir') ...
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251216', '20251216T114536.A_NONE.B_NONE.SCP_01.sessiondir') ...
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260204', '20260204T104914.A_Elmo.B_JL.SCP_01.sessiondir') ...
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260204', '20260204T112256.A_Elmo.B_JL.SCP_01.sessiondir') ...		
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260204', '20260204T115759.A_Elmo.B_JL.SCP_01.sessiondir') ...
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260316', '20260316T133055.A_BA.B_NONE.SCP_01.sessiondir') ...	% test session Basak with gaze tracking
-		...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', '20260319T112338.A_Elmo.B_BA.SCP_01.sessiondir') ...	% Elmo's first session with gaze tracking!!!
+		...fullfile(SESSIONLOGS_dir, '2025', '251205', '20251205T185226.A_NONE.B_NONE.SCP_01.sessiondir') ...
+		...fullfile(SESSIONLOGS_dir, '2025', '251216', '20251216T114536.A_NONE.B_NONE.SCP_01.sessiondir') ...
+		...fullfile(SESSIONLOGS_dir, '2026', '260204', '20260204T104914.A_Elmo.B_JL.SCP_01.sessiondir') ...
+		...fullfile(SESSIONLOGS_dir, '2026', '260204', '20260204T112256.A_Elmo.B_JL.SCP_01.sessiondir') ...
+		...fullfile(SESSIONLOGS_dir, '2026', '260204', '20260204T115759.A_Elmo.B_JL.SCP_01.sessiondir') ...
+		fullfile(cur_SCP_DATA_BaseDir, 'SCP-CTRL-01', 'CCF', 'foraging_task_2_NHP', 'SESSIONLOGS', '2026', '260316', '20260316T133055.A_BA.B_NONE.SCP_01.sessiondir') ...	% test session Basak with gaze tracking
+		...fullfile(SESSIONLOGS_dir, '2026', '260319', '20260319T112338.A_Elmo.B_BA.SCP_01.sessiondir') ...	% Elmo's first session with gaze tracking!!!
 		};
 	cur_CCF_runfolder_FQN_list = {...
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', '20260319T112338.A_Elmo.B_BA.SCP_01.sessiondir') ...	% Elmo's first session with gaze tracking!!!
+		fullfile(SESSIONLOGS_dir, '2026', '260319', '20260319T112338.A_Elmo.B_BA.SCP_01.sessiondir') ...	% Elmo's first session with gaze tracking!!!
 	};
 
-	cur_CCF_runfolder_FQN_list = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', '20260319TNNNNNNM2.A_Elmo.B_MIXED.SCP_01.sessiondir')};
+	cur_CCF_runfolder_FQN_list = {fullfile(SESSIONLOGS_dir, '2026', '260319', '20260319TNNNNNNM2.A_Elmo.B_MIXED.SCP_01.sessiondir')};
 end
 
 

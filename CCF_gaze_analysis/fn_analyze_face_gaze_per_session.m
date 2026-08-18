@@ -36,8 +36,9 @@ dyadic_solo_significance_label_mode = 'direction'; % 'stars' | 'direction'
 
 % if we run this directly for testing we want/need this to be in the
 % path...
+by_host_DirectoriesStruct = GetDirectoriesByHostName('local_code');
 if ~exist('cur_CCF_runfolder_FQN_list', 'var')
-	CCF_analysis_path = fullfile('C:', 'SCP_CODE', 'CCF_analysis_matlab');
+	CCF_analysis_path = fullfile(by_host_DirectoriesStruct.local.SCP_CODE_BaseDir , 'CCF_analysis_matlab');
 	% delete existing paths containing the calling directory
 	% this is a work around for matlab's inability to detect changed files on
 	% most network shares
@@ -46,7 +47,7 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var')
 		disp('Current directory already in the path; deleting all subdirectories from the path to work around network share issues...');
 		% turn the path into cell array
 		while length(path_string) > 0
-			[cur_path_item, remain] = strtok(path_string, ';:');
+			[cur_path_item, remain] = strtok(path_string, pathsep);
 			path_string = remain(2:end);
 			if ~isempty(strfind(cur_path_item, CCF_analysis_path))
 				rmpath(cur_path_item);
@@ -57,8 +58,9 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var')
 	addpath(genpath(CCF_analysis_path));
 end
 
+[SESSIONLOGS_dir, cur_SCP_DATA_BaseDir] = fn_get_SESSIONLOGS_dir_for_host();
 
-out_dir = fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', 'CCF', 'GAZE_ANALYSIS');
+out_dir = fullfile(SESSIONLOGS_dir, 'CCF', 'GAZE_ANALYSIS');
 plotting_options_struct = fn_BoS_ephys_default_plotting_options;
 % overrides
 plotting_options_struct.format_string_list = {'.png', '.fig'};
@@ -68,24 +70,24 @@ plotting_options_struct.figure_visibility_string = 'off';	% invisible figures sh
 
 if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_list)
 	cur_CCF_runfolder_FQN_list = { ...
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251219', '20251219TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  1: re-run with correct scaling
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260204', '20260204TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  2: correct scaling
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260206', '20260206TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  3: correct scaling
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260306', '20260306TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  4:
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260312', '20260312TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  5:
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', '20260319TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  6: first session with monkey gaze data...
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260320', '20260320TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  7: session with gaze data, but with broken calibration data, take calibration from 260319
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260325', '20260325TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  8:
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260326', '20260326TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  9:
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260402', '20260402TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 10:
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260403', '20260403TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 11:
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260409', '20260409TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 12:
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260423', '20260423TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 13:
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260424', '20260424TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 14:
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260428', '20260428TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 15:
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260429', '20260429TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 16:
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260430', '20260430TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 17:
-		fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260501', '20260501TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 18:
+		fullfile(SESSIONLOGS_dir, '2025', '251219', '20251219TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  1: re-run with correct scaling
+		fullfile(SESSIONLOGS_dir, '2026', '260204', '20260204TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  2: correct scaling
+		fullfile(SESSIONLOGS_dir, '2026', '260206', '20260206TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  3: correct scaling
+		fullfile(SESSIONLOGS_dir, '2026', '260306', '20260306TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  4:
+		fullfile(SESSIONLOGS_dir, '2026', '260312', '20260312TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  5:
+		fullfile(SESSIONLOGS_dir, '2026', '260319', '20260319TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  6: first session with monkey gaze data...
+		fullfile(SESSIONLOGS_dir, '2026', '260320', '20260320TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  7: session with gaze data, but with broken calibration data, take calibration from 260319
+		fullfile(SESSIONLOGS_dir, '2026', '260325', '20260325TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  8:
+		fullfile(SESSIONLOGS_dir, '2026', '260326', '20260326TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	%  9:
+		fullfile(SESSIONLOGS_dir, '2026', '260402', '20260402TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 10:
+		fullfile(SESSIONLOGS_dir, '2026', '260403', '20260403TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 11:
+		fullfile(SESSIONLOGS_dir, '2026', '260409', '20260409TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 12:
+		fullfile(SESSIONLOGS_dir, '2026', '260423', '20260423TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 13:
+		fullfile(SESSIONLOGS_dir, '2026', '260424', '20260424TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 14:
+		fullfile(SESSIONLOGS_dir, '2026', '260428', '20260428TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 15:
+		fullfile(SESSIONLOGS_dir, '2026', '260429', '20260429TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 16:
+		fullfile(SESSIONLOGS_dir, '2026', '260430', '20260430TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 17:
+		fullfile(SESSIONLOGS_dir, '2026', '260501', '20260501TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	5 18:
 		};
 
 	%cur_CCF_runfolder_FQN_list = cur_CCF_runfolder_FQN_list(end); % clear up to 7
@@ -102,19 +104,19 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 	if (only_process_gaze_calibration)
 		% the gaze calibration sessions...
 		cur_CCF_runfolder_FQN_list = { ...
-			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260319', '20260319T110006.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% first session with monkey gaze data...
-			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260320', '20260320TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% the calibration routine was broken, this session uses the calibration from 260319 instead
-			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260326', '20260326T103026.A_Elmo.B_NONE.SCP_01.sessiondir'), ...
-			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260326', '20260326T103026.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
-			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260402', '20260402T100142.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
-			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260403', '20260403T093508.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
-			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260409', '20260409T100642.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
-			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260423', '20260423T102851.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
-			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260424', '20260424T101945.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
-			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260428', '20260428T102602.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
-			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260429', '20260429T100042.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
-			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260430', '20260430T090028.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
-			...fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2026', '260501', '20260501T085455.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+			...fullfile(SESSIONLOGS_dir, '2026', '260319', '20260319T110006.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% first session with monkey gaze data...
+			...fullfile(SESSIONLOGS_dir, '2026', '260320', '20260320TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% the calibration routine was broken, this session uses the calibration from 260319 instead
+			...fullfile(SESSIONLOGS_dir, '2026', '260326', '20260326T103026.A_Elmo.B_NONE.SCP_01.sessiondir'), ...
+			...fullfile(SESSIONLOGS_dir, '2026', '260326', '20260326T103026.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
+			...fullfile(SESSIONLOGS_dir, '2026', '260402', '20260402T100142.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
+			...fullfile(SESSIONLOGS_dir, '2026', '260403', '20260403T093508.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
+			...fullfile(SESSIONLOGS_dir, '2026', '260409', '20260409T100642.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 12
+			...fullfile(SESSIONLOGS_dir, '2026', '260423', '20260423T102851.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+			...fullfile(SESSIONLOGS_dir, '2026', '260424', '20260424T101945.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+			...fullfile(SESSIONLOGS_dir, '2026', '260428', '20260428T102602.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+			...fullfile(SESSIONLOGS_dir, '2026', '260429', '20260429T100042.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+			...fullfile(SESSIONLOGS_dir, '2026', '260430', '20260430T090028.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
+			...fullfile(SESSIONLOGS_dir, '2026', '260501', '20260501T085455.A_Elmo.B_NONE.SCP_01.sessiondir'), ...	% 13
 			};
 	end
 	% use a file picker to select the desired folder
@@ -1124,8 +1126,8 @@ if (plot_2d_and_object_proportions_xsession)
 
 	if (perform_dyadic_solo_comparison_xsession)
 		%cur_plotting_options_struct.figure_visibility_string = 'On';
-		%dyadic_solo_significance_test_method = 'glme';      % 'glme' | 'ranksum' | 'ttest'
-		%dyadic_solo_significance_label_mode = 'direction'; % 'stars' | 'direction'
+		dyadic_solo_significance_test_method = 'glme';      % 'glme' | 'ranksum' | 'ttest'
+		dyadic_solo_significance_label_mode = 'direction'; % 'stars' | 'direction'
 
 		[xsession_dyadic_solo_stats_table, xsession_dyadic_solo_meta] = ...
 			fn_fit_dyadic_vs_solo_gaze_glme(xsession_panel_index_struct_arr, xsession.gaze_on_object_prop_count_table, 0.05, 1, 1, 0, dyadic_solo_significance_test_method);

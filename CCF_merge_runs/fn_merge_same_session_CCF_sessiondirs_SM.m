@@ -30,7 +30,7 @@ if ~isempty(strfind(path, [CCF_analysis_path, pathsep]))
 	disp('Current directory already in the path; deleting all subdirectories from the path to work around network share issues...');
 	% turn the path into cell array
 	while length(path_string) > 0
-		[cur_path_item, remain] = strtok(path_string, ';:');
+		[cur_path_item, remain] = strtok(path_string, pathsep);
 		path_string = remain(2:end);
 		if ~isempty(strfind(cur_path_item, CCF_analysis_path))
 			rmpath(cur_path_item);
@@ -53,10 +53,14 @@ disp(['Starting: ', mfilename]);
 
 % 
 if ~exist('sessiondir_merge_list_FQN', 'var') || isempty(sessiondir_merge_list_FQN)
-	sessiondir_merge_list_FQN = uigetdir(fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS'), 'Select the session directory to merge');
-    sessiondir_merge_list_FQN = {fullfile('Y:', 'SCP_DATA', 'SCP-CTRL-01', 'SESSIONLOGS', '2025', '251219', '20251219TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir', 'merge_CCF_sessiondir_list.txt')};
+	[SESSIONLOGS_dir, ~] = fn_get_SESSIONLOGS_dir_for_host();
+	%sessiondir_merge_list_FQN = uigetdir(SESSIONLOGS_dir, 'Select the session directory to merge');
+	sessiondir_merge_list_FQN = fullfile(SESSIONLOGS_dir, '2025', '251219', ...
+		'20251219TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir', 'merge_CCF_sessiondir_list.txt');
 end
-
+if iscell(sessiondir_merge_list_FQN)
+	sessiondir_merge_list_FQN = sessiondir_merge_list_FQN{1};
+end
 
 % read in the list of sessiondirs to merge data from
 sessiondir_merge_list = readlines(sessiondir_merge_list_FQN);
