@@ -83,6 +83,13 @@ if ~exist('sessiondir_merge_list_FQN_list', 'var') || isempty(sessiondir_merge_l
 		'20260409TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir', 'merge_CCF_sessiondir_list.txt')};
 
 	sessiondir_merge_list_FQN_list = { ...
+		fullfile(SESSIONLOGS_dir, '2025', '250829', '20250829TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir', 'merge_CCF_sessiondir_list.txt'),...	% dyadic session, no ephys,
+		fullfile(SESSIONLOGS_dir, '2025', '250902', '20250902TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir', 'merge_CCF_sessiondir_list.txt'),...	% dyadic session, no ephys, record2D incorrect
+		fullfile(SESSIONLOGS_dir, '2025', '250903', '20250903TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir', 'merge_CCF_sessiondir_list.txt'),...	% dyadic session, no ephys
+		fullfile(SESSIONLOGS_dir, '2025', '250904', '20250904TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir', 'merge_CCF_sessiondir_list.txt'),...	% dyadic session, no ephys
+		fullfile(SESSIONLOGS_dir, '2025', '250910', '20250910TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir', 'merge_CCF_sessiondir_list.txt'),...	% dyadic session
+		fullfile(SESSIONLOGS_dir, '2025', '250911', '20250911TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir', 'merge_CCF_sessiondir_list.txt'),...	% dyadic session
+		fullfile(SESSIONLOGS_dir, '2025', '250912', '20250912TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir', 'merge_CCF_sessiondir_list.txt'),...	% dyadic session
 		fullfile(SESSIONLOGS_dir, '2025', '251219', '20251219TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir', 'merge_TDT_TANK_dir_list.txt'), ...	% re-run with correct scaling
 		fullfile(SESSIONLOGS_dir, '2026', '260204', '20260204TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir', 'merge_TDT_TANK_dir_list.txt'), ...		% correct scaling
 		fullfile(SESSIONLOGS_dir, '2026', '260206', '20260206TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir', 'merge_TDT_TANK_dir_list.txt'), ...		% correct scaling
@@ -103,7 +110,8 @@ if ~exist('sessiondir_merge_list_FQN_list', 'var') || isempty(sessiondir_merge_l
 		fullfile(SESSIONLOGS_dir, '2026', '260501', '20260501TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir', 'merge_TDT_TANK_dir_list.txt'), ...
 		};
 
-	sessiondir_merge_list_FQN_list = sessiondir_merge_list_FQN_list(end);
+	%sessiondir_merge_list_FQN_list = sessiondir_merge_list_FQN_list(end);
+	sessiondir_merge_list_FQN_list = sessiondir_merge_list_FQN_list(1);
 end
 
 if ~iscell(sessiondir_merge_list_FQN_list)
