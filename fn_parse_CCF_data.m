@@ -237,6 +237,16 @@ if ~exist('cur_CCF_runfolder_FQN_list', 'var') || isempty(cur_CCF_runfolder_FQN_
 	cur_CCF_runfolder_FQN_list = {fullfile(SESSIONLOGS_dir, '2026', '260319', '20260319TNNNNNNM2.A_Elmo.B_MIXED.SCP_01.sessiondir')};
 
 	cur_CCF_runfolder_FQN_list = { ...
+		... fullfile(SESSIONLOGS_dir, '2025', '250829', '20250829TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'),...	% dyadic session, no ephys,
+		... fullfile(SESSIONLOGS_dir, '2025', '250918', '20250901T102545.A_Elmo.B_NONE.SCP_01.sessiondir'),...	% single run session, no ephys
+		...	fullfile(SESSIONLOGS_dir, '2025', '250902', '20250902TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'),...	% dyadic session, no ephys
+		... fullfile(SESSIONLOGS_dir, '2025', '250903', '20250903TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'),...	% dyadic session, no ephys
+		... fullfile(SESSIONLOGS_dir, '2025', '250904', '20250904TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'),...	% dyadic session, no ephys
+		... fullfile(SESSIONLOGS_dir, '2025', '250908', '20250908T081548.A_Elmo.B_NONE.SCP_01.sessiondir'),...	% single run session, no ephys
+		... fullfile(SESSIONLOGS_dir, '2025', '250909', '20250909T095123.A_Elmo.B_NONE.SCP_01.sessiondir'),...	% single run session, no ephys
+		... fullfile(SESSIONLOGS_dir, '2025', '250910', '20250910TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'),...	% dyadic session, no ephys
+		... fullfile(SESSIONLOGS_dir, '2025', '250911', '20250911TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'),...	% dyadic session, no ephys
+		... fullfile(SESSIONLOGS_dir, '2025', '250912', '20250912TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'),...	% dyadic session, no ephys
 		fullfile(SESSIONLOGS_dir, '2025', '251219', '20251219TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 1, re-run with correct scaling
 		fullfile(SESSIONLOGS_dir, '2026', '260204', '20260204TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 2, correct scaling
 		fullfile(SESSIONLOGS_dir, '2026', '260206', '20260206TNNNNNNM.A_Elmo.B_MIXED.SCP_01.sessiondir'), ...	% 3, correct scaling
