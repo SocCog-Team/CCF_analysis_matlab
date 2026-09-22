@@ -27,7 +27,7 @@ for i_direntry = 1 : length(proto_tank_list)
 	cur_name = proto_tank_list(i_direntry).name;
 	% tanks are really directories, but with arbitrary names... this allows
 	% additional files in the TDT folder...
-	if ~isempty(strfind(cur_name, session_date)) && (proto_tank_list(i_direntry).isdir) && isempty(strfind(cur_name, 'exclude.')) && isempty(strfind(cur_name, 'EXCLUDE.')) && ~isempty(strfind(cur_name, 'SCP_'))
+	if ~isempty(strfind(cur_name, session_date)) && (proto_tank_list(i_direntry).isdir) && isempty(regexpi(cur_name, '^exclude\.', 'once')) && isempty(regexpi(cur_name, '\.exclude$', 'once')) && ~isempty(strfind(cur_name, 'SCP_'))
 		TDT_tank_ID = cur_name;
 		break
 	end
