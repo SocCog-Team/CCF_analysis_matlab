@@ -1,15 +1,24 @@
 function [ synthetic_tank_FQN, tdt_ccf_segment_table ] = fn_attach_TDT_data_to_merged_CCF_session( ...
 	merged_sessiondir_FQN, attach_request_list, gap_fill_mode)
-%FN_ATTACH_TDT_DATA_TO_MERGED_CCF_SESSION Gap-fill ULTRASort products onto tbc_1.
-%   Always-on (empty attach_request_list): synthetic tank, renamed run-1
-%   headers, ULTRASort sidecars (xlsx/svg/tif/jpg), segment table, tbc_1
-%   re-save, STAGE markers, GB estimate.
-%   Tokens: 'merged_TANKdirs' | 'datafilt' | 'datafilt2' | 'dataspikes'
+%FN_ATTACH_TDT_DATA_TO_MERGED_CCF_SESSION Copy ULTRASort products onto tbc_1 with inter-run gaps.
+%   Two trees, two clocks:
+%     .mergedir  — gapless concat (ULTRASort). Never write here.
+%     .sessiondir — CCF analysis. Synthetic tank TDT/<prefix>-<YYMMDD>-000000 is gapped
+%                   onto run-1 TDT time (tbc_1) so existing round(tdt_s * sr) PETH/MUA stays valid.
 %
-%   merged_sessiondir_FQN: .sessiondir, .mergedir, or a merge-list .txt
-%       whose parent is one of those.
-%   gap_fill_mode: 'zero' (default; aliases 'null','nulling'), 'mean',
-%       'gaussian', 'nan'
+%   Always-on (any request, including {}): headers, sidecars, segment table, tbc_1, GB estimate.
+%   Tokens (optional, any subset; STAGE_<token>.finished skips a finished token):
+%     'merged_TANKdirs'  gapless concat -> *.scaledSEV.mat (MUA does not need this)
+%     'datafilt'         datafilt_ch*.mat
+%     'datafilt2'        datafilt2_ch*.mat  (MUA default)
+%     'dataspikes'       remap index onto tbc_1 ms; requires non-template unit xlsx
+%
+%   merged_sessiondir_FQN: .sessiondir, .mergedir, or a merge-list .txt whose parent is one of those.
+%   gap_fill_mode: 'zero' (default; aliases 'null'/'nulling'), 'mean', 'gaussian', 'nan'.
+%                  'nan' will abort current PETH (~isfinite guard).
+%
+%   Re-run is cheap: per-channel dest-exists skip + STAGE markers. Add 'dataspikes' later
+%   after sorting without redoing datafilt2.
 
 timestamps.(mfilename).start = tic;
 disp(['Starting: ', mfilename]);
@@ -36,6 +45,7 @@ end
 gap_fill_mode = fn_normalize_gap_fill_mode(gap_fill_mode);
 attach_request_list = fn_validate_attach_request_list(attach_request_list);
 
+% --- resolve siblings, require merge_struct / merge list / CCF merge_manifest ---
 [merged_sessiondir_FQN, mergedir_FQN] = fn_resolve_sessiondir_and_mergedir(merged_sessiondir_FQN);
 session_info = fn_parse_session_id(merged_sessiondir_FQN);
 if (debug)
@@ -70,11 +80,13 @@ if (max(sr_list) - min(sr_list)) > 1e-6
 	error([mfilename, ': sampling_rate_Hz not identical across tanks: ', num2str(sr_list')]);
 end
 sr = sr_list(1);
+% n_k_list: gapless sample counts per source tank (concat axis). N (later) is the gapped tbc_1 length.
 n_k_list = double(merge_struct.samples_per_TANK(:));
 if length(n_k_list) ~= n_run
 	error([mfilename, ': samples_per_TANK length does not match n_run']);
 end
 
+% --- synthetic tank: first-run TDT id with -HHMMSS replaced by -000000 ---
 [source_tank_id_list, synthetic_tank_ID] = fn_synthetic_tank_id_from_sources(source_tank_FQN_list);
 tdt_parent_FQN = fullfile(merged_sessiondir_FQN, 'TDT');
 if ~isfolder(tdt_parent_FQN)
@@ -86,6 +98,7 @@ if ~isfolder(synthetic_tank_FQN)
 end
 disp([mfilename, ': INFO: synthetic tank: ', synthetic_tank_FQN]);
 
+% --- always-on: run-1 .tsq/.tev/... renamed to synthetic id; no SEVs copied ---
 headers_incomplete_ldx = fn_stage_is_done(synthetic_tank_FQN, 'headers') ...
 	&& isempty(fn_dir_header_files(synthetic_tank_FQN, '*.tsq'));
 if ~fn_stage_is_done(synthetic_tank_FQN, 'headers') || headers_incomplete_ldx
@@ -100,6 +113,7 @@ if ~fn_stage_is_done(synthetic_tank_FQN, 'headers') || headers_incomplete_ldx
 	fn_write_stage_marker(synthetic_tank_FQN, 'headers');
 end
 
+% --- always-on: xlsx/plots as-is. 'dataspikes' errors if no non-template xlsx; else WARN ---
 xlsx_stem = 'unit_merge_and_reject_sheet.v01.20210309.160ch.neg.pos.';
 expected_xlsx_FQN = fullfile(synthetic_tank_FQN, [xlsx_stem, session_info.session_id, '.xlsx']);
 sidecars_incomplete_ldx = fn_stage_is_done(synthetic_tank_FQN, 'ultrasort_sidecars') ...
@@ -114,6 +128,7 @@ if ~fn_stage_is_done(synthetic_tank_FQN, 'ultrasort_sidecars') || sidecars_incom
 	fn_write_stage_marker(synthetic_tank_FQN, 'ultrasort_sidecars');
 end
 
+% --- per-source TBC required (parse each source session first). tbc_1 is the analysis clock ---
 tbc_FQN_list = cell(n_run, 1);
 time_conversion_struct_list = cell(n_run, 1);
 tbc_1_src_struct = struct();
@@ -133,6 +148,7 @@ for i_run = 1 : n_run
 	clear tmp_tbc
 end
 
+% --- place each run at i0:i1 on tbc_1; holes between i1(k) and i0(k+1) are the gap fill ---
 segment_table_FQN = fullfile(synthetic_tank_FQN, 'tdt_ccf_segment_table.mat');
 if ~fn_stage_is_done(synthetic_tank_FQN, 'segment_table') || ~isfile(segment_table_FQN)
 	tdt_ccf_segment_table = fn_build_tdt_ccf_segment_table( ...
@@ -147,15 +163,18 @@ else
 end
 fn_print_gap_gb_estimate(tdt_ccf_segment_table, merge_struct, attach_request_list, gap_fill_mode);
 
+% --- copy tbc_1 into the synthetic tank so parse/PETH use the same conversion as run 1 ---
 if ~fn_stage_is_done(synthetic_tank_FQN, 'tbc')
 	fn_resave_tbc_1(tbc_1_src_struct, synthetic_tank_FQN, merged_sessiondir_FQN);
 	fn_write_stage_marker(synthetic_tank_FQN, 'tbc');
 end
 
+% concat_* index the gapless mergedir vector; i0/i1 index the gapped out_vec
 concat_start_idx_list = [1; cumsum(n_k_list(1:end-1)) + 1];
 concat_end_idx_list = cumsum(n_k_list);
 concat_start_ts_ms_list = (concat_start_idx_list ./ sr) * 1000;
 
+% --- requested tokens: one channel at a time; dest-exists skip; then STAGE_<token> ---
 for i_tok = 1 : length(attach_request_list)
 	cur_token = attach_request_list{i_tok};
 	if fn_stage_is_done(synthetic_tank_FQN, cur_token)
@@ -176,6 +195,7 @@ for i_tok = 1 : length(attach_request_list)
 	fn_write_stage_marker(synthetic_tank_FQN, cur_token);
 end
 
+% scaledSEV must keep cur_channel_data only (legacy 'data' field breaks MUA load)
 fn_strip_data_from_scaledSEV_mats(synthetic_tank_FQN);
 
 fn_extend_merge_manifest(manifest_FQN, synthetic_tank_FQN, synthetic_tank_ID, ...
@@ -239,6 +259,7 @@ end
 
 
 function [ merged_sessiondir_FQN, mergedir_FQN ] = fn_resolve_sessiondir_and_mergedir(in_FQN)
+% Accept .sessiondir / .mergedir / merge-list.txt. Always operate on the sibling pair.
 
 in_FQN = char(in_FQN);
 if contains(in_FQN, 'SCP_DATA')
@@ -296,6 +317,7 @@ end
 
 
 function [ source_tank_id_list, synthetic_tank_ID ] = fn_synthetic_tank_id_from_sources(source_tank_FQN_list)
+% SCP_DAG_v27_PZ04-260319-112338 -> ...-000000. All sources must share prefix+date.
 
 n_run = length(source_tank_FQN_list);
 source_tank_id_list = cell(n_run, 1);
@@ -504,6 +526,8 @@ t_start_tdt1_list = nan(n_run, 1);
 t_end_tdt1_list = nan(n_run, 1);
 residual_list = nan(n_run, 1);
 
+% Per run: TDT local 0 .. (n_k-1)/sr --tbc_k--> CCF --tbc_1--> TDT_1, then i0 = round(t_start_tdt1 * sr).
+% No +1. Residual is i1 vs round(t_end_tdt1 * sr); overlap with previous i1 is fatal.
 for i_run = 1 : n_run
 	n_k = n_k_list(i_run);
 	tbc_k = time_conversion_struct_list{i_run};
@@ -608,6 +632,7 @@ end
 if numel(ParaState_TDT_timestamps) < 2
 	error([mfilename, ': tbc_1 has fewer than 2 matched events']);
 end
+% Drop first/last matched events when n>10 (same trim as parse). Fit is run-1 events, saved as the merged tank TBC.
 if numel(ParaState_TDT_timestamps) > 10
 	fit_tdt_list = ParaState_TDT_timestamps(2:end-1);
 	fit_ccf_list = ParaState_CCF_timestamps(2:end-1);
@@ -635,6 +660,8 @@ end
 
 function fn_attach_continuous_token(mergedir_FQN, synthetic_tank_FQN, cur_token, ...
 	tdt_ccf_segment_table, concat_start_idx_list, concat_end_idx_list, gap_fill_mode)
+% Gapless concat_vec (length sum(n_k)) -> out_vec (length N) with holes filled, then paste run slices.
+% One channel in RAM. 'datafilt' wildcard also matches datafilt2; skip those names.
 
 N = tdt_ccf_segment_table.N(1);
 i0_list = tdt_ccf_segment_table.i0;
@@ -728,17 +755,21 @@ end
 
 
 function [ out_vec ] = fn_allocate_gap_fill(N, gap_fill_mode, proto_vec)
+% 'zero'/'nan': no mean/std (those double() the full concat). 'mean'/'gaussian' only.
 
 cls = class(proto_vec);
-mu = mean(double(proto_vec));
-sg = std(double(proto_vec));
 switch gap_fill_mode
 	case 'zero'
 		out_vec = zeros(N, 1, cls);
 	case 'mean'
+		mu = mean(double(proto_vec));
 		out_vec = zeros(N, 1, cls);
 		out_vec(:) = cast(mu, cls);
 	case 'gaussian'
+		proto_vec_double = double(proto_vec);
+		mu = mean(proto_vec_double);
+		sg = std(proto_vec_double);
+		clear proto_vec_double
 		tmp_vec = mu + sg * randn(N, 1);
 		if strcmp(cls, 'int16')
 			tmp_vec = round(tmp_vec);
@@ -791,6 +822,8 @@ for i_file = 1 : length(src_dirstruct)
 		error([mfilename, ': dataspikes missing index: ', cur_src_FQN]);
 	end
 	old_index_ms_list = cur_file_struct.index(:);
+	% index is ms on the gapless concat clock. Map spike -> source run via concat edges, then
+	% local TDT -> CCF (that run's TBC) -> tbc_1. cluster_class(:,2) is the same ms axis.
 	k_list = discretize(old_index_ms_list, edges_ms_list);
 	if any(isnan(k_list))
 		error([mfilename, ': spike index outside concat segments in ', cur_src_FQN]);
